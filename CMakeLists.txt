@@ -10,3 +10,6 @@ FetchContent_MakeAvailable(googletest)
 
 add_executable(mygen_test mygen_test.cpp)
 target_link_libraries(mygen_test PRIVATE gtest gtest_main pthread)
+
+add_executable(intensive_test intensive_test.cpp)
+target_link_libraries(intensive_test PRIVATE gtest gtest_main pthread)

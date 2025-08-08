@@ -8,5 +8,5 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(googletest)
 
-add_executable(test_mygen test_mygen.cpp)
-target_link_libraries(test_mygen PRIVATE gtest gtest_main pthread)
+add_executable(mygen_test mygen_test.cpp)
+target_link_libraries(mygen_test PRIVATE gtest gtest_main pthread)

@@ -4,11 +4,11 @@
 #include <memory>
 
 // Test fixture for basic integer tests
-class IntensiveTest : public ::testing::TestWithParam<int> {
+class IntensiveTest : public ::gtest_generator::TestWithGenerator {
 };
 
 // Test fixture for pointer tests
-class PointerTest : public ::testing::TestWithParam<int> {
+class PointerTest : public ::gtest_generator::TestWithGenerator {
 protected:
     void SetUp() override {
         // Allocate test pointers
@@ -48,7 +48,7 @@ struct TestObject {
     }
 };
 
-class ObjectTest : public ::testing::TestWithParam<int> {
+class ObjectTest : public ::gtest_generator::TestWithGenerator {
 protected:
     TestObject obj1{10, "first"};
     TestObject obj2{20, "second"};
@@ -56,7 +56,7 @@ protected:
 };
 
 // Multiple test cases on same fixture
-TEST_P(IntensiveTest, BasicArithmetic) {
+TEST_G(IntensiveTest, BasicArithmetic) {
     int a = GENERATOR(1, 2, 3);
     int b = GENERATOR(10, 20);
     int op = GENERATOR(0, 1);  // 0=add, 1=multiply
@@ -73,7 +73,7 @@ TEST_P(IntensiveTest, BasicArithmetic) {
     }
 }
 
-TEST_P(IntensiveTest, Comparison) {
+TEST_G(IntensiveTest, Comparison) {
     int x = GENERATOR(5, 10, 15);
     int y = GENERATOR(8, 12);
     USE_GENERATOR();
@@ -90,7 +90,7 @@ TEST_P(IntensiveTest, Comparison) {
            x, y, less, greater, equal);
 }
 
-TEST_P(IntensiveTest, ArrayIndexing) {
+TEST_G(IntensiveTest, ArrayIndexing) {
     int arr[] = {100, 200, 300, 400, 500};
     int idx1 = GENERATOR(0, 1, 2);
     int idx2 = GENERATOR(3, 4);
@@ -102,7 +102,7 @@ TEST_P(IntensiveTest, ArrayIndexing) {
 }
 
 // Pointer tests
-TEST_P(PointerTest, PointerArithmetic) {
+TEST_G(PointerTest, PointerArithmetic) {
     int* ptrs[] = {ptr1, ptr2, ptr3};
     int idx = GENERATOR(0, 1, 2);
     int offset = GENERATOR(0, 1);
@@ -115,7 +115,7 @@ TEST_P(PointerTest, PointerArithmetic) {
     printf("Pointer test: *ptrs[%d]=%d, modified=%d\n", idx, value, modified);
 }
 
-TEST_P(PointerTest, PointerComparison) {
+TEST_G(PointerTest, PointerComparison) {
     int values[] = {10, 20, 30};
     int* p1 = &values[GENERATOR(0, 1)];
     int* p2 = &values[GENERATOR(1, 2)];
@@ -129,7 +129,7 @@ TEST_P(PointerTest, PointerComparison) {
 }
 
 // Object tests
-TEST_P(ObjectTest, ObjectComparison) {
+TEST_G(ObjectTest, ObjectComparison) {
     TestObject* objs[] = {&obj1, &obj2, &obj3};
     int idx1 = GENERATOR(0, 1);
     int idx2 = GENERATOR(1, 2);
@@ -145,7 +145,7 @@ TEST_P(ObjectTest, ObjectComparison) {
            objs[idx2]->name.c_str(), objs[idx2]->value);
 }
 
-TEST_P(ObjectTest, ObjectProperties) {
+TEST_G(ObjectTest, ObjectProperties) {
     TestObject objects[] = {
         TestObject(GENERATOR(1, 2), "test"),
         TestObject(GENERATOR(10, 20), "demo")
@@ -161,10 +161,10 @@ TEST_P(ObjectTest, ObjectProperties) {
 }
 
 // Complex nested generators
-class ComplexTest : public ::testing::TestWithParam<int> {
+class ComplexTest : public ::gtest_generator::TestWithGenerator {
 };
 
-TEST_P(ComplexTest, NestedLogic) {
+TEST_G(ComplexTest, NestedLogic) {
     int category = GENERATOR(0, 1, 2);  // 3 categories
     int subcategory = GENERATOR(0, 1); // 2 subcategories
     int value = GENERATOR(100, 200);   // 2 values
@@ -186,10 +186,10 @@ TEST_P(ComplexTest, NestedLogic) {
 }
 
 // STL container tests
-class STLTest : public ::testing::TestWithParam<int> {
+class STLTest : public ::gtest_generator::TestWithGenerator {
 };
 
-TEST_P(STLTest, VectorOperations) {
+TEST_G(STLTest, VectorOperations) {
     std::vector<int> vec;
     int size = GENERATOR(1, 2, 3);
     int multiplier = GENERATOR(10, 100);
@@ -210,7 +210,7 @@ TEST_P(STLTest, VectorOperations) {
     printf("]\n");
 }
 
-TEST_P(STLTest, StringOperations) {
+TEST_G(STLTest, StringOperations) {
     std::string prefix = GENERATOR(0, 1) ? "Hello" : "Hi";
     std::string suffix = GENERATOR(0, 1) ? "World" : "There";
     int repeat = GENERATOR(1, 2);
@@ -230,10 +230,10 @@ TEST_P(STLTest, StringOperations) {
 }
 
 // Edge case tests
-class EdgeCaseTest : public ::testing::TestWithParam<int> {
+class EdgeCaseTest : public ::gtest_generator::TestWithGenerator {
 };
 
-TEST_P(EdgeCaseTest, BoundaryValues) {
+TEST_G(EdgeCaseTest, BoundaryValues) {
     int low = GENERATOR(-1, 0, 1);
     int high = GENERATOR(99, 100, 101);
     USE_GENERATOR();

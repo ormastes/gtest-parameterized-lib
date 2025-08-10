@@ -1,5 +1,7 @@
 # GTest Generator - Parameterized Test Library
 
+*Read this in other languages: [한국어](README.ko.md), [日本語](README.ja.md), [中文](README.zh.md), [Español](README.es.md), [Français](README.fr.md), [Deutsch](README.de.md), [Italiano](README.it.md), [Português](README.pt-BR.md)*
+
 A simple header-only library that provides Catch2-style `GENERATE` syntax for Google Test parameterized tests.
 
 ## Features

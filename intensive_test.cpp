@@ -247,18 +247,4 @@ TEST_G(EdgeCaseTest, BoundaryValues) {
         EXPECT_GE(low, 0);
         EXPECT_LE(high, 100);
     }
-}
-
-// Note: Due to hardcoded limit of 4 combinations in ENABLE_GENERATOR,
-// we need to adjust expectations for now
-ENABLE_GENERATOR(IntensiveTest, BasicArithmetic)  // 3*2*2 = 12 tests 
-ENABLE_GENERATOR(IntensiveTest, Comparison)       // 3*2 = 6 tests 
-ENABLE_GENERATOR(IntensiveTest, ArrayIndexing)    // 3*2 = 6 tests 
-ENABLE_GENERATOR(PointerTest, PointerArithmetic)  // 3*2 = 6 tests 
-ENABLE_GENERATOR(PointerTest, PointerComparison)  // 2*2 = 4 tests
-ENABLE_GENERATOR(ObjectTest, ObjectComparison)    // 2*2 = 4 tests
-ENABLE_GENERATOR(ObjectTest, ObjectProperties)    // 2*2 = 4 tests
-ENABLE_GENERATOR(ComplexTest, NestedLogic)        // 3*2*2 = 12 tests 
-ENABLE_GENERATOR(STLTest, VectorOperations)       // 3*2 = 6 tests 
-ENABLE_GENERATOR(STLTest, StringOperations)       // 2*2*2 = 8 tests 
-ENABLE_GENERATOR(EdgeCaseTest, BoundaryValues)    // 3*3 = 9 tests 
+} 

@@ -158,18 +158,29 @@ inline const T& GetGeneratorValue(std::initializer_list<T> values, ::gtest_gener
         return *(values.begin() + ((paramIndex / current_devider) % values.size()));
     }
 }
+
+// Helper template for lazy initialization
+template<typename TestClass>
+inline DynamicRangeGenerator* CreateGenerator(const std::string& name) {
+    static DynamicRangeGenerator* generator = 
+        new DynamicRangeGenerator(name, new TestClass());
+    return generator;
 }
+
+}  // namespace gtest_generator
+
 // Macros
 #define USE_GENERATOR() if (gtest_generator::IsCountingMode(*this)) return;
 #define GENERATOR(...) gtest_generator::GetGeneratorValue<gtest_generator::make_unique_id(__FILE__, __LINE__)>({__VA_ARGS__}, this)
 
 #define TEST_G(TestClassName, TestName) \
     class TestClassName##__##TestName : public TestClassName {};\
+    class GTEST_TEST_CLASS_NAME_(TestClassName##__##TestName, __); \
+    inline gtest_generator::DynamicRangeGenerator* __gtest_generator__get_generator_##TestClassName##TestName() { \
+        return gtest_generator::CreateGenerator<GTEST_TEST_CLASS_NAME_(TestClassName##__##TestName, __)>( \
+            #TestClassName"."#TestName); \
+    } \
+    INSTANTIATE_TEST_SUITE_P(Generator, TestClassName##__##TestName, \
+        testing::internal::ParamGenerator<int>(__gtest_generator__get_generator_##TestClassName##TestName())); \
     TEST_P(TestClassName##__##TestName, __)
-
-
-#define ENABLE_GENERATOR(TestClassName, TestName) \
-    static gtest_generator::DynamicRangeGenerator* __gtest_generator__generator_##TestClassName##TestName \
-        = new gtest_generator::DynamicRangeGenerator( #TestClassName"."#TestName, new GTEST_TEST_CLASS_NAME_(TestClassName##__##TestName, __)()); \
-    INSTANTIATE_TEST_SUITE_P(Generator, TestClassName##__##TestName, testing::internal::ParamGenerator<int>(__gtest_generator__generator_##TestClassName##TestName));
 

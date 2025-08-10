@@ -11,7 +11,6 @@ TEST_G(MyTest, SimpleCase) {
     EXPECT_LT(a, b);
     printf("Test case: a=%d, b=%d\n", a, b);
 }
-ENABLE_GENERATOR(MyTest, SimpleCase);
 
 
 TEST_G(MyTest, SimpleCase2) {
@@ -22,7 +21,6 @@ TEST_G(MyTest, SimpleCase2) {
     EXPECT_LT(a, b);
     printf("Test case: a=%d, b=%d\n", a, b);
 }
-ENABLE_GENERATOR(MyTest, SimpleCase2);
 
 
 TEST_G(MyTest, SimpleCase3) {
@@ -33,7 +31,6 @@ TEST_G(MyTest, SimpleCase3) {
     EXPECT_LT(a, b);
     printf("Test case: a=%d, b=%d\n", a, b);
 }
-ENABLE_GENERATOR(MyTest, SimpleCase3);
 
 struct Simple {
     int a;
@@ -50,7 +47,6 @@ TEST_G(MyTest, StructCase) {
     printf("Struct case: a={%d, %d}, b={%d, %d}\n", 
            a.a, a.b, b.a, b.b);
 }
-ENABLE_GENERATOR(MyTest, StructCase);
 
 class TestObject {
     public:
@@ -77,7 +73,6 @@ TEST_G(MyTest, ObjectCase) {
            obj1.value, obj1.name.c_str(), 
            obj2.value, obj2.name.c_str());
 }
-ENABLE_GENERATOR(MyTest, ObjectCase);
 
 TEST_G(MyTest, ObjectCase2) {
     auto obj1 = GENERATOR(TestObject(1, "first"), TestObject(2, "second"));
@@ -89,7 +84,6 @@ TEST_G(MyTest, ObjectCase2) {
            obj1.value, obj1.name.c_str(), 
            obj2.value, obj2.name.c_str());  
 }
-ENABLE_GENERATOR(MyTest, ObjectCase2);
 
 TEST_G(MyTest, ObjectCase3) {
     auto obj1 = GENERATOR(new TestObject(GENERATOR(1, 2), "first"),
@@ -103,4 +97,3 @@ TEST_G(MyTest, ObjectCase3) {
            obj1->value, obj1->name.c_str(), 
            obj2->value, obj2->name.c_str());  
 }
-ENABLE_GENERATOR(MyTest, ObjectCase3);

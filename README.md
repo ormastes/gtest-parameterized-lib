@@ -28,9 +28,7 @@ TEST_G(MyTest, SimpleCase) {
     EXPECT_LT(a, b);
     printf("Test: a=%d, b=%d\n", a, b);
 }
-
-// Enable generator (creates 4 test cases: 1,10 / 1,20 / 2,10 / 2,20)
-ENABLE_GENERATOR(MyTest, SimpleCase)
+// TEST_G automatically handles test generation - no ENABLE_GENERATOR needed!
 ```
 
 ## Installation
@@ -86,7 +84,6 @@ TEST_G(MyTest, MultipleValues) {
     // Generates 9 test combinations
     EXPECT_LT(x, y);
 }
-ENABLE_GENERATOR(MyTest, MultipleValues);
 ```
 
 ### Different Number of Values
@@ -100,7 +97,6 @@ TEST_G(MyTest, AsymmetricCombinations) {
     int result = size * scale;
     EXPECT_GT(result, 0);
 }
-ENABLE_GENERATOR(MyTest, AsymmetricCombinations);
 ```
 
 ### Using Generated Values in Expressions
@@ -119,8 +115,7 @@ TEST_G(MyTest, ComputedValues) {
     if (!data.empty()) {
         EXPECT_EQ(data.back(), (base - 1) * multiplier);
     }
-}
-ENABLE_GENERATOR(MyTest, ComputedValues);
+}MyTest, ComputedValues);
 ```
 
 ### Complex Test Logic
@@ -139,8 +134,7 @@ TEST_G(MyTest, ConditionalLogic) {
     
     EXPECT_GT(result, 0);
     printf("Mode %d with value %d gives result %d\n", mode, value, result);
-}
-ENABLE_GENERATOR(MyTest, ConditionalLogic);
+}MyTest, ConditionalLogic);
 ```
 
 ## Advanced Examples
@@ -169,8 +163,7 @@ TEST_G(MyTest, ObjectGeneration) {
     printf("Objects: obj1={%d, %s}, obj2={%d, %s}\n", 
            obj1.value, obj1.name.c_str(), 
            obj2.value, obj2.name.c_str());
-}
-ENABLE_GENERATOR(MyTest, ObjectGeneration);
+}MyTest, ObjectGeneration);
 ```
 
 #### Using GENERATOR in Constructor Arguments
@@ -190,8 +183,7 @@ TEST_G(MyTest, ConstructorWithGenerators) {
     printf("Array objects: [0]={%d,%s}, [1]={%d,%s}\n",
            objects[0].value, objects[0].name.c_str(),
            objects[1].value, objects[1].name.c_str());
-}
-ENABLE_GENERATOR(MyTest, ConstructorWithGenerators);
+}MyTest, ConstructorWithGenerators);
 ```
 
 ### Working with Pointers and Dynamic Memory
@@ -215,8 +207,7 @@ TEST_G(MyTest, PointerGeneration) {
     // Clean up
     delete ptr1;
     delete ptr2;
-}
-ENABLE_GENERATOR(MyTest, PointerGeneration);
+}MyTest, PointerGeneration);
 ```
 
 #### Nested GENERATOR Calls (Advanced)
@@ -237,8 +228,7 @@ TEST_G(MyTest, NestedGenerators) {
     
     delete obj1;
     delete obj2;
-}
-ENABLE_GENERATOR(MyTest, NestedGenerators);
+}MyTest, NestedGenerators);
 ```
 
 ### Working with STL Containers
@@ -263,8 +253,7 @@ TEST_G(MyTest, STLContainers) {
     printf("Vector: size=%d, multiplier=%d, elements=[", size, multiplier);
     for (int v : vec) printf("%d ", v);
     printf("]\n");
-}
-ENABLE_GENERATOR(MyTest, STLContainers);
+}MyTest, STLContainers);
 ```
 
 #### Generating String Combinations
@@ -287,8 +276,7 @@ TEST_G(MyTest, StringCombinations) {
     EXPECT_FALSE(result.empty());
     printf("String: prefix='%s', suffix='%s', repeat=%d => '%s'\n",
            prefix.c_str(), suffix.c_str(), repeat, result.c_str());
-}
-ENABLE_GENERATOR(MyTest, StringCombinations);
+}MyTest, StringCombinations);
 ```
 
 ### Working with Smart Pointers
@@ -307,8 +295,7 @@ TEST_G(MyTest, SmartPointers) {
     printf("Smart pointers: ptr1={%d, %s}, ptr2={%d, %s}\n",
            ptr1->value, ptr1->name.c_str(),
            ptr2->value, ptr2->name.c_str());
-}
-ENABLE_GENERATOR(MyTest, SmartPointers);
+}MyTest, SmartPointers);
 ```
 
 ### Complex Struct Examples
@@ -329,15 +316,14 @@ TEST_G(MyTest, StructGeneration) {
     EXPECT_GT(distance, 0);
     printf("Points: p1=(%d,%d), p2=(%d,%d), distance=%d\n",
            p1.x, p1.y, p2.x, p2.y, distance);
-}
-ENABLE_GENERATOR(MyTest, StructGeneration);
+}MyTest, StructGeneration);
 ```
 
 ## API Reference
 
 ### Macros
 
-- **`TEST_G(TestClassName, TestName)`** - Defines a parameterized test (replaces TEST_P)
+- **`TEST_G(TestClassName, TestName)`** - Defines a parameterized test with automatic test generation. Replaces both TEST_P and the need for separate ENABLE_GENERATOR calls.
 
 - **`GENERATOR(...)`** - Defines values for a test parameter. Each call creates a new dimension of test combinations.
   ```cpp
@@ -346,8 +332,6 @@ ENABLE_GENERATOR(MyTest, StructGeneration);
   **IMPORTANT**: All GENERATOR() calls must come BEFORE USE_GENERATOR()
 
 - **`USE_GENERATOR()`** - Must be called once in each TEST_G, AFTER all GENERATOR() calls.
-
-- **`ENABLE_GENERATOR(TestClassName, TestName)`** - Instantiates all test combinations for the specified test.
 
 ## How It Works
 

@@ -134,6 +134,79 @@ TEST_G(MyTest, STLContainers) {
 }
 ```
 
+## Sampling-Modi
+
+Die Bibliothek unterstützt zwei Sampling-Modi für die Generierung von Testkombinationen:
+
+### FULL-Modus (Standard - Kartesisches Produkt)
+Der Standardmodus generiert alle möglichen Kombinationen von Werten (Kartesisches Produkt). Dies ist das traditionelle Verhalten, das vollständige Testabdeckung gewährleistet.
+
+```cpp
+TEST_G(MyTest, FullMode) {
+    USE_GENERATOR();  // Standard ist FULL-Modus
+    // oder explizit: USE_GENERATOR(FULL);
+    
+    auto x = GENERATOR(1, 2);      // 2 Werte
+    auto y = GENERATOR(10, 20);    // 2 Werte
+    auto z = GENERATOR(100, 200);  // 2 Werte
+    
+    // Generiert 8 Testläufe: 2 × 2 × 2 = 8 Kombinationen
+    // (1,10,100), (1,10,200), (1,20,100), (1,20,200),
+    // (2,10,100), (2,10,200), (2,20,100), (2,20,200)
+}
+```
+
+### ALIGNED-Modus (Parallele Iteration)
+Der ALIGNED-Modus iteriert durch alle Spalten parallel, wie ein Reißverschluss. Jede Spalte rückt bei jedem Lauf zum nächsten Wert vor und springt an den Anfang, wenn sie das Ende erreicht. Die Gesamtanzahl der Läufe entspricht der Größe der größten Spalte.
+
+```cpp
+TEST_G(MyTest, AlignedMode) {
+    USE_GENERATOR(ALIGNED);  // ALIGNED-Modus aktivieren
+    
+    auto x = GENERATOR(1, 2);           // 2 Werte
+    auto y = GENERATOR(10, 20, 30, 40); // 4 Werte  
+    auto z = GENERATOR(100, 200, 300);  // 3 Werte
+    
+    // Generiert 4 Testläufe (maximale Spaltengröße):
+    // Lauf 0: (1, 10, 100)  - alle bei Index 0
+    // Lauf 1: (2, 20, 200)  - alle bei Index 1
+    // Lauf 2: (1, 30, 300)  - x springt zu 0, andere bei Index 2
+    // Lauf 3: (2, 40, 100)  - x bei 1, y bei 3, z springt zu 0
+}
+```
+
+#### Wichtige Eigenschaften des ALIGNED-Modus:
+- **Deterministisch**: Werte werden in Reihenfolge (0, 1, 2, ...) mit Umbruch ausgewählt
+- **Deklarationsreihenfolge**: Spalten werden in der Reihenfolge verarbeitet, in der sie deklariert wurden
+- **Weniger Läufe**: Gesamtläufe = maximale Spaltengröße (nicht das Produkt)
+- **Ausgewogene Abdeckung**: Jeder Wert in jeder Spalte wird ungefähr gleich häufig verwendet
+
+#### Wann welcher Modus zu verwenden ist:
+- **FULL-Modus**: Wenn Sie erschöpfende Tests aller Kombinationen benötigen
+- **ALIGNED-Modus**: Wenn Sie repräsentatives Sampling mit weniger Testläufen wünschen
+
+#### Vergleichsbeispiel:
+```cpp
+// FULL-Modus: 3 × 2 × 2 = 12 Läufe
+TEST_G(MyTest, FullExample) {
+    USE_GENERATOR(FULL);
+    auto a = GENERATOR(1, 2, 3);
+    auto b = GENERATOR(10, 20);
+    auto c = GENERATOR(100, 200);
+    // Generiert alle 12 Kombinationen
+}
+
+// ALIGNED-Modus: max(3, 2, 2) = 3 Läufe  
+TEST_G(MyTest, AlignedExample) {
+    USE_GENERATOR(ALIGNED);
+    auto a = GENERATOR(1, 2, 3);
+    auto b = GENERATOR(10, 20);
+    auto c = GENERATOR(100, 200);
+    // Generiert nur 3 Kombinationen:
+    // (1, 10, 100), (2, 20, 200), (3, 10, 100)
+}
+```
+
 ## API-Referenz
 
 ### Makros
@@ -146,7 +219,11 @@ TEST_G(MyTest, STLContainers) {
   ```
   **WICHTIG**: Alle GENERATOR() Aufrufe müssen VOR USE_GENERATOR() kommen
 
-- **`USE_GENERATOR()`** - Muss einmal in jedem TEST_G aufgerufen werden, NACH allen GENERATOR() Aufrufen.
+- **`USE_GENERATOR()`** - Muss einmal in jedem TEST_G aufgerufen werden, NACH allen GENERATOR() Aufrufen. Verwendet standardmäßig den FULL-Modus.
+
+- **`USE_GENERATOR(mode)`** - Muss einmal in jedem TEST_G aufgerufen werden, NACH allen GENERATOR() Aufrufen. Spezifiziert den Sampling-Modus:
+  - `USE_GENERATOR(FULL)` - Kartesisches Produkt aller Werte (gleich wie Standard)
+  - `USE_GENERATOR(ALIGNED)` - Parallele Iteration durch Spalten
 
 ## Wie es funktioniert
 

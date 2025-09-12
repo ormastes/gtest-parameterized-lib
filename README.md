@@ -321,6 +321,79 @@ TEST_G(MyTest, StructGeneration) {
 }MyTest, StructGeneration);
 ```
 
+## Sampling Modes
+
+The library supports two sampling modes for generating test combinations:
+
+### FULL Mode (Default - Cartesian Product)
+The default mode generates all possible combinations of values (Cartesian product). This is the traditional behavior that ensures complete test coverage.
+
+```cpp
+TEST_G(MyTest, FullMode) {
+    USE_GENERATOR();  // Default is FULL mode
+    // or explicitly: USE_GENERATOR(FULL);
+    
+    auto x = GENERATOR(1, 2);      // 2 values
+    auto y = GENERATOR(10, 20);    // 2 values
+    auto z = GENERATOR(100, 200);  // 2 values
+    
+    // Generates 8 test runs: 2 × 2 × 2 = 8 combinations
+    // (1,10,100), (1,10,200), (1,20,100), (1,20,200),
+    // (2,10,100), (2,10,200), (2,20,100), (2,20,200)
+}
+```
+
+### ALIGNED Mode (Parallel Iteration)
+ALIGNED mode iterates through all columns in parallel, like a zipper. Each column advances to its next value on each run, wrapping around when it reaches the end. The total number of runs equals the size of the largest column.
+
+```cpp
+TEST_G(MyTest, AlignedMode) {
+    USE_GENERATOR(ALIGNED);  // Enable ALIGNED mode
+    
+    auto x = GENERATOR(1, 2);           // 2 values
+    auto y = GENERATOR(10, 20, 30, 40); // 4 values  
+    auto z = GENERATOR(100, 200, 300);  // 3 values
+    
+    // Generates 4 test runs (max column size):
+    // Run 0: (1, 10, 100)  - all at index 0
+    // Run 1: (2, 20, 200)  - all at index 1
+    // Run 2: (1, 30, 300)  - x wraps to 0, others at index 2
+    // Run 3: (2, 40, 100)  - x at 1, y at 3, z wraps to 0
+}
+```
+
+#### Key Characteristics of ALIGNED Mode:
+- **Deterministic**: Values are selected in order (0, 1, 2, ...) with wrapping
+- **Declaration Order**: Columns are processed in the order they are declared
+- **Fewer Runs**: Total runs = maximum column size (not the product)
+- **Balanced Coverage**: Each value in each column is used approximately equally
+
+#### When to Use Each Mode:
+- **FULL Mode**: When you need exhaustive testing of all combinations
+- **ALIGNED Mode**: When you want representative sampling with fewer test runs
+
+#### Example Comparison:
+```cpp
+// FULL mode: 3 × 2 × 2 = 12 runs
+TEST_G(MyTest, FullExample) {
+    USE_GENERATOR(FULL);
+    auto a = GENERATOR(1, 2, 3);
+    auto b = GENERATOR(10, 20);
+    auto c = GENERATOR(100, 200);
+    // Generates all 12 combinations
+}
+
+// ALIGNED mode: max(3, 2, 2) = 3 runs  
+TEST_G(MyTest, AlignedExample) {
+    USE_GENERATOR(ALIGNED);
+    auto a = GENERATOR(1, 2, 3);
+    auto b = GENERATOR(10, 20);
+    auto c = GENERATOR(100, 200);
+    // Generates only 3 combinations:
+    // (1, 10, 100), (2, 20, 200), (3, 10, 100)
+}
+```
+
 ## API Reference
 
 ### Macros
@@ -333,7 +406,11 @@ TEST_G(MyTest, StructGeneration) {
   ```
   **IMPORTANT**: All GENERATOR() calls must come BEFORE USE_GENERATOR()
 
-- **`USE_GENERATOR()`** - Must be called once in each TEST_G, AFTER all GENERATOR() calls.
+- **`USE_GENERATOR()`** - Must be called once in each TEST_G, AFTER all GENERATOR() calls. Uses FULL mode by default.
+
+- **`USE_GENERATOR(mode)`** - Must be called once in each TEST_G, AFTER all GENERATOR() calls. Specifies the sampling mode:
+  - `USE_GENERATOR(FULL)` - Cartesian product of all values (same as default)
+  - `USE_GENERATOR(ALIGNED)` - Parallel iteration through columns
 
 ## How It Works
 

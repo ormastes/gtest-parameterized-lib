@@ -3,7 +3,9 @@
 #include <iostream>
 #include <map>
 #include <string>
+#include <vector>
 #include <cassert>
+#include <algorithm>
 
 
 namespace gtest_generator {
@@ -23,6 +25,20 @@ static std::map<std::string, DynamicRangeGenerator*> g_range_map;
 static thread_local bool on_counting = false;
 static thread_local int current_count = 1;
 
+// --- Mode toggle (default FULL = Cartesian) ---
+enum class SamplingMode { FULL, ALIGNED };
+static thread_local SamplingMode tl_mode = SamplingMode::FULL;
+
+// Column sizes discovered during counting; cursor during run
+static thread_local std::vector<int> tl_col_sizes;
+static thread_local int tl_col_ix = 0;
+
+// Persist per-test column sizes so run phase can access them
+static std::map<std::string, std::vector<int>> g_colsizes_map;
+
+// Track which tests use ALIGNED mode (set during first USE_GENERATOR call)
+static std::map<std::string, SamplingMode> g_test_modes;
+
 // Custom generator implementing GTest’s ParamGeneratorInterface<int>
 class DynamicRangeGenerator : public testing::internal::ParamGeneratorInterface<int> {
  public:
@@ -35,12 +51,31 @@ class DynamicRangeGenerator : public testing::internal::ParamGeneratorInterface<
       : key(k), test_instance(test_case) {
     g_range_map[key] = this;
     if constexpr (GTEST_GENERATOR_LOG) printf("DynamicRangeGenerator created for %s\n", key.c_str());
-    if ( test_instance) {
+    if (test_instance) {
+        // First pass with FULL mode to get max count
         on_counting = true;
-        current_count = 1; // Reset count for each test instance
-        test_instance->TestBody(); // Call the test body
+        current_count = 1;
+        tl_col_sizes.clear();
+        tl_col_ix = 0;
+        tl_mode = SamplingMode::FULL;
+        test_instance->TestBody();
+        int full_count = current_count;
+        
+        // Second pass with ALIGNED mode to get column sizes
+        on_counting = true;
+        current_count = 1;
+        tl_col_sizes.clear();
+        tl_col_ix = 0;
+        tl_mode = SamplingMode::ALIGNED;
+        test_instance->TestBody();
         on_counting = false;
-        end = current_count; // Set end to the current count
+        
+        // Store both counts - we'll decide which to use at runtime
+        g_colsizes_map[key] = tl_col_sizes;
+        
+        // For now, use the full count as max possible
+        end = full_count;
+        tl_col_ix = 0;
     }
   }
 
@@ -144,18 +179,65 @@ constexpr size_t make_unique_id(const char* file, int line) {
 template <size_t UniqueId, typename T>
 inline const T& GetGeneratorValue(std::initializer_list<T> values, ::gtest_generator::TestWithGenerator* test_instance) {
     static int current_devider = 1; // Static variable to hold the current devider
+    
     if (on_counting) {
-        // If in counting mode, update the end value
-        current_devider = current_count;
-        current_count *= values.size(); // Update end to reflect total combinations
-        if constexpr (GTEST_GENERATOR_LOG) printf("Generator value for counting mode: %d\n", current_count);
-        return *values.begin(); // Return a dummy value
-    } else {
-        // If not in counting mode, just return the value for the current index
-        if constexpr (GTEST_GENERATOR_LOG) printf("Getting generator value for test instance: %p\n", test_instance);
+        // Record this column's size in declaration order
+        tl_col_sizes.push_back((int)values.size());
+        
+        if (tl_mode == SamplingMode::FULL) {
+            current_devider = current_count;
+            current_count *= values.size(); // Cartesian only
+        }
+        return *values.begin(); // dummy in counting pass
+    }
+    
+    // RUN PHASE - check what mode this test uses
+    const auto* info = ::testing::UnitTest::GetInstance()->current_test_info();
+    SamplingMode mode = SamplingMode::FULL;
+    if (info) {
+        std::string key = std::string(info->test_suite_name()) + "." + info->name();
+        auto mode_it = g_test_modes.find(key);
+        if (mode_it != g_test_modes.end()) {
+            mode = mode_it->second;
+        }
+    }
+    
+    if (mode == SamplingMode::FULL) {
         int paramIndex = test_instance ? test_instance->GetParam() : 0;
-        if constexpr (GTEST_GENERATOR_LOG) printf("Generator value for index %d: %d\n", paramIndex, *(values.begin() + (paramIndex % values.size())));
         return *(values.begin() + ((paramIndex / current_devider) % values.size()));
+    } else {
+        // ALIGNED: keep column order; round-robin each column's values
+        std::vector<int>* col_sizes = nullptr;
+        if (info) {
+            std::string key = std::string(info->test_suite_name()) + "." + info->name();
+            auto it = g_colsizes_map.find(key);
+            if (it != g_colsizes_map.end()) {
+                col_sizes = &(it->second);
+            }
+        }
+        
+        // Check if we should skip this test iteration
+        int r = test_instance ? test_instance->GetParam() : 0;
+        if (col_sizes && !col_sizes->empty()) {
+            int max_size = 0;
+            for (int s : *col_sizes) max_size = std::max(max_size, s);
+            if (r >= max_size) {
+                // This iteration should be skipped for ALIGNED mode
+                // Return first value as dummy
+                return *values.begin();
+            }
+            
+            int col = tl_col_ix++;
+            if (tl_col_ix >= (int)col_sizes->size()) tl_col_ix = 0;
+            
+            int s_i = (*col_sizes)[col];
+            int idx = (s_i == 0) ? 0 : (r % s_i);
+            return *(values.begin() + idx);
+        }
+        
+        // Fallback
+        int paramIndex = test_instance ? test_instance->GetParam() : 0;
+        return *(values.begin() + (paramIndex % values.size()));
     }
 }
 
@@ -170,7 +252,31 @@ inline DynamicRangeGenerator* CreateGenerator(const std::string& name) {
 }  // namespace gtest_generator
 
 // Macros
-#define USE_GENERATOR() if (gtest_generator::IsCountingMode(*this)) return;
+// USE_GENERATOR with optional mode parameter (defaults to FULL for backward compatibility)
+#define USE_GENERATOR(...) \
+  do { \
+    ::gtest_generator::tl_mode = ::gtest_generator::SamplingMode::FULL; \
+    __VA_OPT__(::gtest_generator::tl_mode = ::gtest_generator::SamplingMode::__VA_ARGS__;) \
+    const auto* info = ::testing::UnitTest::GetInstance()->current_test_info(); \
+    if (info) { \
+      std::string key = std::string(info->test_suite_name()) + "." + info->name(); \
+      ::gtest_generator::g_test_modes[key] = ::gtest_generator::tl_mode; \
+      if (::gtest_generator::tl_mode == ::gtest_generator::SamplingMode::ALIGNED) { \
+        auto it = ::gtest_generator::g_colsizes_map.find(key); \
+        if (it != ::gtest_generator::g_colsizes_map.end() && !it->second.empty()) { \
+          int max_size = 0; \
+          for (int s : it->second) max_size = std::max(max_size, s); \
+          if (GetParam() >= max_size) { \
+            GTEST_SKIP() << "Skipping iteration " << GetParam() << " for ALIGNED mode (max size: " << max_size << ")"; \
+          } \
+        } \
+      } \
+    } \
+    ::gtest_generator::tl_col_sizes.clear(); \
+    ::gtest_generator::tl_col_ix = 0; \
+  } while(0); \
+  if (gtest_generator::IsCountingMode(*this)) return;
+
 #define GENERATOR(...) gtest_generator::GetGeneratorValue<gtest_generator::make_unique_id(__FILE__, __LINE__)>({__VA_ARGS__}, this)
 
 #define TEST_G(TestClassName, TestName) \

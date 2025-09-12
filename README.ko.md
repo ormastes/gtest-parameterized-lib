@@ -134,6 +134,79 @@ TEST_G(MyTest, STLContainers) {
 }
 ```
 
+## 샘플링 모드
+
+라이브러리는 테스트 조합 생성을 위한 두 가지 샘플링 모드를 지원합니다:
+
+### FULL 모드 (기본 - 데카르트 곱)
+기본 모드는 모든 가능한 값의 조합(데카르트 곱)을 생성합니다. 이는 완전한 테스트 커버리지를 보장하는 전통적인 방식입니다.
+
+```cpp
+TEST_G(MyTest, FullMode) {
+    USE_GENERATOR();  // 기본값은 FULL 모드
+    // 또는 명시적으로: USE_GENERATOR(FULL);
+    
+    auto x = GENERATOR(1, 2);      // 2개 값
+    auto y = GENERATOR(10, 20);    // 2개 값
+    auto z = GENERATOR(100, 200);  // 2개 값
+    
+    // 8번의 테스트 실행 생성: 2 × 2 × 2 = 8개 조합
+    // (1,10,100), (1,10,200), (1,20,100), (1,20,200),
+    // (2,10,100), (2,10,200), (2,20,100), (2,20,200)
+}
+```
+
+### ALIGNED 모드 (병렬 반복)
+ALIGNED 모드는 지퍼처럼 모든 열을 병렬로 반복합니다. 각 열은 각 실행마다 다음 값으로 진행하며, 끝에 도달하면 처음부터 다시 시작합니다. 총 실행 횟수는 가장 큰 열의 크기와 같습니다.
+
+```cpp
+TEST_G(MyTest, AlignedMode) {
+    USE_GENERATOR(ALIGNED);  // ALIGNED 모드 활성화
+    
+    auto x = GENERATOR(1, 2);           // 2개 값
+    auto y = GENERATOR(10, 20, 30, 40); // 4개 값  
+    auto z = GENERATOR(100, 200, 300);  // 3개 값
+    
+    // 4번의 테스트 실행 생성 (최대 열 크기):
+    // 실행 0: (1, 10, 100)  - 모든 인덱스 0
+    // 실행 1: (2, 20, 200)  - 모든 인덱스 1
+    // 실행 2: (1, 30, 300)  - x는 0으로 순환, 나머지는 인덱스 2
+    // 실행 3: (2, 40, 100)  - x는 1, y는 3, z는 0으로 순환
+}
+```
+
+#### ALIGNED 모드의 주요 특성:
+- **결정적**: 값은 순서대로(0, 1, 2, ...) 선택되며 순환함
+- **선언 순서**: 열은 선언된 순서대로 처리됨
+- **더 적은 실행**: 총 실행 = 최대 열 크기 (곱이 아님)
+- **균형 잡힌 커버리지**: 각 열의 각 값이 거의 동일하게 사용됨
+
+#### 각 모드를 언제 사용할지:
+- **FULL 모드**: 모든 조합의 철저한 테스트가 필요할 때
+- **ALIGNED 모드**: 더 적은 테스트 실행으로 대표적인 샘플링을 원할 때
+
+#### 예시 비교:
+```cpp
+// FULL 모드: 3 × 2 × 2 = 12번 실행
+TEST_G(MyTest, FullExample) {
+    USE_GENERATOR(FULL);
+    auto a = GENERATOR(1, 2, 3);
+    auto b = GENERATOR(10, 20);
+    auto c = GENERATOR(100, 200);
+    // 12개 조합 모두 생성
+}
+
+// ALIGNED 모드: max(3, 2, 2) = 3번 실행  
+TEST_G(MyTest, AlignedExample) {
+    USE_GENERATOR(ALIGNED);
+    auto a = GENERATOR(1, 2, 3);
+    auto b = GENERATOR(10, 20);
+    auto c = GENERATOR(100, 200);
+    // 3개 조합만 생성:
+    // (1, 10, 100), (2, 20, 200), (3, 10, 100)
+}
+```
+
 ## API 레퍼런스
 
 ### 매크로
@@ -146,7 +219,11 @@ TEST_G(MyTest, STLContainers) {
   ```
   **중요**: 모든 GENERATOR() 호출은 USE_GENERATOR() 이전에 와야 합니다
 
-- **`USE_GENERATOR()`** - 각 TEST_G에서 한 번 호출되어야 하며, 모든 GENERATOR() 호출 이후에 와야 합니다.
+- **`USE_GENERATOR()`** - 각 TEST_G에서 한 번 호출되어야 하며, 모든 GENERATOR() 호출 이후에 와야 합니다. 기본적으로 FULL 모드를 사용합니다.
+
+- **`USE_GENERATOR(mode)`** - 각 TEST_G에서 한 번 호출되어야 하며, 모든 GENERATOR() 호출 이후에 와야 합니다. 샘플링 모드를 지정합니다:
+  - `USE_GENERATOR(FULL)` - 모든 값의 데카르트 곱 (기본값과 동일)
+  - `USE_GENERATOR(ALIGNED)` - 열을 통한 병렬 반복
 
 ## 작동 원리
 

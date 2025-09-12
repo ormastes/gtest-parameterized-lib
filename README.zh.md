@@ -134,6 +134,79 @@ TEST_G(MyTest, STLContainers) {
 }
 ```
 
+## 采样模式
+
+该库支持两种采样模式来生成测试组合：
+
+### FULL模式（默认 - 笛卡尔乘积）
+默认模式生成所有可能的值组合（笛卡尔乘积）。这是保证完整测试覆盖的传统行为。
+
+```cpp
+TEST_G(MyTest, FullMode) {
+    USE_GENERATOR();  // 默认是FULL模式
+    // 或显式地： USE_GENERATOR(FULL);
+    
+    auto x = GENERATOR(1, 2);      // 2个值
+    auto y = GENERATOR(10, 20);    // 2个值
+    auto z = GENERATOR(100, 200);  // 2个值
+    
+    // 生成 8 次测试运行： 2 × 2 × 2 = 8 个组合
+    // (1,10,100), (1,10,200), (1,20,100), (1,20,200),
+    // (2,10,100), (2,10,200), (2,20,100), (2,20,200)
+}
+```
+
+### ALIGNED模式（并行迭代）
+ALIGNED模式像拉链一样并行遍历所有列。每列在每次运行时都会前进到下一个值，达到末尾时会回到开头。总运行次数等于最大列的大小。
+
+```cpp
+TEST_G(MyTest, AlignedMode) {
+    USE_GENERATOR(ALIGNED);  // 启用ALIGNED模式
+    
+    auto x = GENERATOR(1, 2);           // 2个值
+    auto y = GENERATOR(10, 20, 30, 40); // 4个值  
+    auto z = GENERATOR(100, 200, 300);  // 3个值
+    
+    // 生成 4 次测试运行（最大列大小）：
+    // 运行 0: (1, 10, 100)  - 全部在索引 0
+    // 运行 1: (2, 20, 200)  - 全部在索引 1
+    // 运行 2: (1, 30, 300)  - x 回到 0，其他在索引 2
+    // 运行 3: (2, 40, 100)  - x 在 1，y 在 3，z 回到 0
+}
+```
+
+#### ALIGNED模式的关键特征：
+- **确定性**：值按顺序选择（0, 1, 2, ...）并循环
+- **声明顺序**：列按声明顺序处理
+- **更少运行**：总运行次数 = 最大列大小（不是乘积）
+- **平衡覆盖**：每列中的每个值都被近似平等使用
+
+#### 何时使用各种模式：
+- **FULL模式**：当您需要所有组合的穷尽测试时
+- **ALIGNED模式**：当您希望用更少的测试运行进行代表性采样时
+
+#### 比较示例：
+```cpp
+// FULL模式： 3 × 2 × 2 = 12 次运行
+TEST_G(MyTest, FullExample) {
+    USE_GENERATOR(FULL);
+    auto a = GENERATOR(1, 2, 3);
+    auto b = GENERATOR(10, 20);
+    auto c = GENERATOR(100, 200);
+    // 生成所有 12 个组合
+}
+
+// ALIGNED模式： max(3, 2, 2) = 3 次运行  
+TEST_G(MyTest, AlignedExample) {
+    USE_GENERATOR(ALIGNED);
+    auto a = GENERATOR(1, 2, 3);
+    auto b = GENERATOR(10, 20);
+    auto c = GENERATOR(100, 200);
+    // 只生成 3 个组合：
+    // (1, 10, 100), (2, 20, 200), (3, 10, 100)
+}
+```
+
 ## API参考
 
 ### 宏
@@ -146,7 +219,11 @@ TEST_G(MyTest, STLContainers) {
   ```
   **重要**: 所有GENERATOR()调用必须在USE_GENERATOR()之前
 
-- **`USE_GENERATOR()`** - 必须在每个TEST_G中调用一次，在所有GENERATOR()调用之后。
+- **`USE_GENERATOR()`** - 必须在每个TEST_G中调用一次，在所有GENERATOR()调用之后。默认使用FULL模式。
+
+- **`USE_GENERATOR(mode)`** - 必须在每个TEST_G中调用一次，在所有GENERATOR()调用之后。指定采样模式：
+  - `USE_GENERATOR(FULL)` - 所有值的笛卡尔乘积（与默认相同）
+  - `USE_GENERATOR(ALIGNED)` - 通过列的并行迭代
 
 ## 工作原理
 

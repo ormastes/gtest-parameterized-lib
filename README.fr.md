@@ -134,6 +134,79 @@ TEST_G(MyTest, STLContainers) {
 }
 ```
 
+## Modes d'Échantillonnage
+
+La bibliothèque prend en charge deux modes d'échantillonnage pour générer des combinaisons de tests :
+
+### Mode FULL (Par Défaut - Produit Cartésien)
+Le mode par défaut génère toutes les combinaisons possibles de valeurs (produit cartésien). Il s'agit du comportement traditionnel qui garantit une couverture de test complète.
+
+```cpp
+TEST_G(MyTest, FullMode) {
+    USE_GENERATOR();  // Par défaut, c'est le mode FULL
+    // ou explicitement : USE_GENERATOR(FULL);
+    
+    auto x = GENERATOR(1, 2);      // 2 valeurs
+    auto y = GENERATOR(10, 20);    // 2 valeurs
+    auto z = GENERATOR(100, 200);  // 2 valeurs
+    
+    // Génère 8 exécutions de test : 2 × 2 × 2 = 8 combinaisons
+    // (1,10,100), (1,10,200), (1,20,100), (1,20,200),
+    // (2,10,100), (2,10,200), (2,20,100), (2,20,200)
+}
+```
+
+### Mode ALIGNED (Itération Parallèle)
+Le mode ALIGNED itère à travers toutes les colonnes en parallèle, comme une fermeture éclair. Chaque colonne avance à sa valeur suivante à chaque exécution, en se répétant lorsqu'elle atteint la fin. Le nombre total d'exécutions est égal à la taille de la plus grande colonne.
+
+```cpp
+TEST_G(MyTest, AlignedMode) {
+    USE_GENERATOR(ALIGNED);  // Activer le mode ALIGNED
+    
+    auto x = GENERATOR(1, 2);           // 2 valeurs
+    auto y = GENERATOR(10, 20, 30, 40); // 4 valeurs  
+    auto z = GENERATOR(100, 200, 300);  // 3 valeurs
+    
+    // Génère 4 exécutions de test (taille maximale de colonne) :
+    // Exécution 0 : (1, 10, 100)  - tous à l'index 0
+    // Exécution 1 : (2, 20, 200)  - tous à l'index 1
+    // Exécution 2 : (1, 30, 300)  - x revient à 0, autres à l'index 2
+    // Exécution 3 : (2, 40, 100)  - x à 1, y à 3, z revient à 0
+}
+```
+
+#### Caractéristiques Clés du Mode ALIGNED :
+- **Déterministe** : Les valeurs sont sélectionnées dans l'ordre (0, 1, 2, ...) avec répétition
+- **Ordre de Déclaration** : Les colonnes sont traitées dans l'ordre où elles sont déclarées
+- **Moins d'Exécutions** : Total d'exécutions = taille maximale de colonne (pas le produit)
+- **Couverture Équilibrée** : Chaque valeur dans chaque colonne est utilisée approximativement de manière égale
+
+#### Quand Utiliser Chaque Mode :
+- **Mode FULL** : Quand vous avez besoin de tests exhaustifs de toutes les combinaisons
+- **Mode ALIGNED** : Quand vous voulez un échantillonnage représentatif avec moins d'exécutions de test
+
+#### Exemple de Comparaison :
+```cpp
+// Mode FULL : 3 × 2 × 2 = 12 exécutions
+TEST_G(MyTest, FullExample) {
+    USE_GENERATOR(FULL);
+    auto a = GENERATOR(1, 2, 3);
+    auto b = GENERATOR(10, 20);
+    auto c = GENERATOR(100, 200);
+    // Génère toutes les 12 combinaisons
+}
+
+// Mode ALIGNED : max(3, 2, 2) = 3 exécutions  
+TEST_G(MyTest, AlignedExample) {
+    USE_GENERATOR(ALIGNED);
+    auto a = GENERATOR(1, 2, 3);
+    auto b = GENERATOR(10, 20);
+    auto c = GENERATOR(100, 200);
+    // Génère seulement 3 combinaisons :
+    // (1, 10, 100), (2, 20, 200), (3, 10, 100)
+}
+```
+
 ## Référence API
 
 ### Macros
@@ -146,7 +219,11 @@ TEST_G(MyTest, STLContainers) {
   ```
   **IMPORTANT** : Tous les appels GENERATOR() doivent venir AVANT USE_GENERATOR()
 
-- **`USE_GENERATOR()`** - Doit être appelé une fois dans chaque TEST_G, APRÈS tous les appels GENERATOR().
+- **`USE_GENERATOR()`** - Doit être appelé une fois dans chaque TEST_G, APRÈS tous les appels GENERATOR(). Utilise le mode FULL par défaut.
+
+- **`USE_GENERATOR(mode)`** - Doit être appelé une fois dans chaque TEST_G, APRÈS tous les appels GENERATOR(). Spécifie le mode d'échantillonnage :
+  - `USE_GENERATOR(FULL)` - Produit cartésien de toutes les valeurs (identique au défaut)
+  - `USE_GENERATOR(ALIGNED)` - Itération parallèle à travers les colonnes
 
 ## Comment Ça Fonctionne
 

@@ -13,3 +13,6 @@ target_link_libraries(mygen_test PRIVATE gtest gtest_main pthread)
 
 add_executable(intensive_test intensive_test.cpp)
 target_link_libraries(intensive_test PRIVATE gtest gtest_main pthread)
+
+add_executable(test_aligned_mode test_aligned_mode.cpp)
+target_link_libraries(test_aligned_mode PRIVATE gtest gtest_main pthread)

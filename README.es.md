@@ -134,6 +134,79 @@ TEST_G(MyTest, STLContainers) {
 }
 ```
 
+## Modos de Muestreo
+
+La biblioteca soporta dos modos de muestreo para generar combinaciones de prueba:
+
+### Modo FULL (Predeterminado - Producto Cartesiano)
+El modo predeterminado genera todas las combinaciones posibles de valores (producto cartesiano). Este es el comportamiento tradicional que asegura una cobertura de prueba completa.
+
+```cpp
+TEST_G(MyTest, FullMode) {
+    USE_GENERATOR();  // El predeterminado es modo FULL
+    // o explícitamente: USE_GENERATOR(FULL);
+    
+    auto x = GENERATOR(1, 2);      // 2 valores
+    auto y = GENERATOR(10, 20);    // 2 valores
+    auto z = GENERATOR(100, 200);  // 2 valores
+    
+    // Genera 8 ejecuciones de prueba: 2 × 2 × 2 = 8 combinaciones
+    // (1,10,100), (1,10,200), (1,20,100), (1,20,200),
+    // (2,10,100), (2,10,200), (2,20,100), (2,20,200)
+}
+```
+
+### Modo ALIGNED (Iteración Paralela)
+El modo ALIGNED itera a través de todas las columnas en paralelo, como una cremallera. Cada columna avanza a su siguiente valor en cada ejecución, volviéndose al inicio cuando llega al final. El número total de ejecuciones es igual al tamaño de la columna más grande.
+
+```cpp
+TEST_G(MyTest, AlignedMode) {
+    USE_GENERATOR(ALIGNED);  // Habilitar modo ALIGNED
+    
+    auto x = GENERATOR(1, 2);           // 2 valores
+    auto y = GENERATOR(10, 20, 30, 40); // 4 valores  
+    auto z = GENERATOR(100, 200, 300);  // 3 valores
+    
+    // Genera 4 ejecuciones de prueba (tamaño máximo de columna):
+    // Ejecución 0: (1, 10, 100)  - todos en índice 0
+    // Ejecución 1: (2, 20, 200)  - todos en índice 1
+    // Ejecución 2: (1, 30, 300)  - x vuelve a 0, otros en índice 2
+    // Ejecución 3: (2, 40, 100)  - x en 1, y en 3, z vuelve a 0
+}
+```
+
+#### Características Clave del Modo ALIGNED:
+- **Determinístico**: Los valores se seleccionan en orden (0, 1, 2, ...) con envolvimiento
+- **Orden de Declaración**: Las columnas se procesan en el orden en que se declaran
+- **Menos Ejecuciones**: Total de ejecuciones = tamaño máximo de columna (no el producto)
+- **Cobertura Equilibrada**: Cada valor en cada columna se usa aproximadamente por igual
+
+#### Cuándo Usar Cada Modo:
+- **Modo FULL**: Cuando necesitas pruebas exhaustivas de todas las combinaciones
+- **Modo ALIGNED**: Cuando quieres muestreo representativo con menos ejecuciones de prueba
+
+#### Ejemplo de Comparación:
+```cpp
+// Modo FULL: 3 × 2 × 2 = 12 ejecuciones
+TEST_G(MyTest, FullExample) {
+    USE_GENERATOR(FULL);
+    auto a = GENERATOR(1, 2, 3);
+    auto b = GENERATOR(10, 20);
+    auto c = GENERATOR(100, 200);
+    // Genera todas las 12 combinaciones
+}
+
+// Modo ALIGNED: max(3, 2, 2) = 3 ejecuciones  
+TEST_G(MyTest, AlignedExample) {
+    USE_GENERATOR(ALIGNED);
+    auto a = GENERATOR(1, 2, 3);
+    auto b = GENERATOR(10, 20);
+    auto c = GENERATOR(100, 200);
+    // Genera solo 3 combinaciones:
+    // (1, 10, 100), (2, 20, 200), (3, 10, 100)
+}
+```
+
 ## Referencia de API
 
 ### Macros
@@ -146,7 +219,11 @@ TEST_G(MyTest, STLContainers) {
   ```
   **IMPORTANTE**: Todas las llamadas GENERATOR() deben venir ANTES de USE_GENERATOR()
 
-- **`USE_GENERATOR()`** - Debe llamarse una vez en cada TEST_G, DESPUÉS de todas las llamadas GENERATOR().
+- **`USE_GENERATOR()`** - Debe llamarse una vez en cada TEST_G, DESPUÉS de todas las llamadas GENERATOR(). Usa el modo FULL por defecto.
+
+- **`USE_GENERATOR(mode)`** - Debe llamarse una vez en cada TEST_G, DESPUÉS de todas las llamadas GENERATOR(). Especifica el modo de muestreo:
+  - `USE_GENERATOR(FULL)` - Producto cartesiano de todos los valores (igual al predeterminado)
+  - `USE_GENERATOR(ALIGNED)` - Iteración paralela a través de columnas
 
 ## Cómo Funciona
 

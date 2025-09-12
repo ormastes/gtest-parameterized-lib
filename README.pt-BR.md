@@ -134,6 +134,79 @@ TEST_G(MyTest, STLContainers) {
 }
 ```
 
+## Modos de Amostragem
+
+A biblioteca suporta dois modos de amostragem para gerar combinações de teste:
+
+### Modo FULL (Padrão - Produto Cartesiano)
+O modo padrão gera todas as combinações possíveis de valores (produto cartesiano). Este é o comportamento tradicional que garante cobertura completa de teste.
+
+```cpp
+TEST_G(MyTest, FullMode) {
+    USE_GENERATOR();  // O padrão é modo FULL
+    // ou explicitamente: USE_GENERATOR(FULL);
+    
+    auto x = GENERATOR(1, 2);      // 2 valores
+    auto y = GENERATOR(10, 20);    // 2 valores
+    auto z = GENERATOR(100, 200);  // 2 valores
+    
+    // Gera 8 execuções de teste: 2 × 2 × 2 = 8 combinações
+    // (1,10,100), (1,10,200), (1,20,100), (1,20,200),
+    // (2,10,100), (2,10,200), (2,20,100), (2,20,200)
+}
+```
+
+### Modo ALIGNED (Iteração Paralela)
+O modo ALIGNED itera através de todas as colunas em paralelo, como um zíper. Cada coluna avança para seu próximo valor a cada execução, voltando ao início quando atinge o final. O número total de execuções é igual ao tamanho da maior coluna.
+
+```cpp
+TEST_G(MyTest, AlignedMode) {
+    USE_GENERATOR(ALIGNED);  // Habilitar modo ALIGNED
+    
+    auto x = GENERATOR(1, 2);           // 2 valores
+    auto y = GENERATOR(10, 20, 30, 40); // 4 valores  
+    auto z = GENERATOR(100, 200, 300);  // 3 valores
+    
+    // Gera 4 execuções de teste (tamanho máximo da coluna):
+    // Execução 0: (1, 10, 100)  - todos no índice 0
+    // Execução 1: (2, 20, 200)  - todos no índice 1
+    // Execução 2: (1, 30, 300)  - x volta para 0, outros no índice 2
+    // Execução 3: (2, 40, 100)  - x em 1, y em 3, z volta para 0
+}
+```
+
+#### Características Principais do Modo ALIGNED:
+- **Determinístico**: Valores são selecionados em ordem (0, 1, 2, ...) com envolvimento
+- **Ordem de Declaração**: Colunas são processadas na ordem em que são declaradas
+- **Menos Execuções**: Total de execuções = tamanho máximo da coluna (não o produto)
+- **Cobertura Equilibrada**: Cada valor em cada coluna é usado aproximadamente igualmente
+
+#### Quando Usar Cada Modo:
+- **Modo FULL**: Quando você precisa de testes exaustivos de todas as combinações
+- **Modo ALIGNED**: Quando você quer amostragem representativa com menos execuções de teste
+
+#### Exemplo de Comparação:
+```cpp
+// Modo FULL: 3 × 2 × 2 = 12 execuções
+TEST_G(MyTest, FullExample) {
+    USE_GENERATOR(FULL);
+    auto a = GENERATOR(1, 2, 3);
+    auto b = GENERATOR(10, 20);
+    auto c = GENERATOR(100, 200);
+    // Gera todas as 12 combinações
+}
+
+// Modo ALIGNED: max(3, 2, 2) = 3 execuções  
+TEST_G(MyTest, AlignedExample) {
+    USE_GENERATOR(ALIGNED);
+    auto a = GENERATOR(1, 2, 3);
+    auto b = GENERATOR(10, 20);
+    auto c = GENERATOR(100, 200);
+    // Gera apenas 3 combinações:
+    // (1, 10, 100), (2, 20, 200), (3, 10, 100)
+}
+```
+
 ## Referência da API
 
 ### Macros
@@ -146,7 +219,11 @@ TEST_G(MyTest, STLContainers) {
   ```
   **IMPORTANTE**: Todas as chamadas GENERATOR() devem vir ANTES de USE_GENERATOR()
 
-- **`USE_GENERATOR()`** - Deve ser chamado uma vez em cada TEST_G, DEPOIS de todas as chamadas GENERATOR().
+- **`USE_GENERATOR()`** - Deve ser chamado uma vez em cada TEST_G, DEPOIS de todas as chamadas GENERATOR(). Usa o modo FULL por padrão.
+
+- **`USE_GENERATOR(mode)`** - Deve ser chamado uma vez em cada TEST_G, DEPOIS de todas as chamadas GENERATOR(). Especifica o modo de amostragem:
+  - `USE_GENERATOR(FULL)` - Produto cartesiano de todos os valores (igual ao padrão)
+  - `USE_GENERATOR(ALIGNED)` - Iteração paralela através das colunas
 
 ## Como Funciona
 

@@ -30,7 +30,7 @@ TEST_G(MyTest, SimpleCase) {
     EXPECT_LT(a, b);
     printf("Test: a=%d, b=%d\n", a, b);
 }
-// TEST_G automatically handles test generation - no ENABLE_GENERATOR needed!
+// a, b = (1, 10), (2, 10), (1, 20), (2, 20) 
 ```
 
 ## Installation
@@ -117,7 +117,7 @@ TEST_G(MyTest, ComputedValues) {
     if (!data.empty()) {
         EXPECT_EQ(data.back(), (base - 1) * multiplier);
     }
-}MyTest, ComputedValues);
+}
 ```
 
 ### Complex Test Logic
@@ -136,7 +136,7 @@ TEST_G(MyTest, ConditionalLogic) {
     
     EXPECT_GT(result, 0);
     printf("Mode %d with value %d gives result %d\n", mode, value, result);
-}MyTest, ConditionalLogic);
+}
 ```
 
 ## Advanced Examples
@@ -330,12 +330,11 @@ The default mode generates all possible combinations of values (Cartesian produc
 
 ```cpp
 TEST_G(MyTest, FullMode) {
-    USE_GENERATOR();  // Default is FULL mode
-    // or explicitly: USE_GENERATOR(FULL);
-    
     auto x = GENERATOR(1, 2);      // 2 values
     auto y = GENERATOR(10, 20);    // 2 values
     auto z = GENERATOR(100, 200);  // 2 values
+    USE_GENERATOR();  // Default is FULL mode
+    // or explicitly: USE_GENERATOR(FULL);
     
     // Generates 8 test runs: 2 × 2 × 2 = 8 combinations
     // (1,10,100), (1,10,200), (1,20,100), (1,20,200),
@@ -348,11 +347,10 @@ ALIGNED mode iterates through all columns in parallel, like a zipper. Each colum
 
 ```cpp
 TEST_G(MyTest, AlignedMode) {
-    USE_GENERATOR(ALIGNED);  // Enable ALIGNED mode
-    
     auto x = GENERATOR(1, 2);           // 2 values
     auto y = GENERATOR(10, 20, 30, 40); // 4 values  
     auto z = GENERATOR(100, 200, 300);  // 3 values
+    USE_GENERATOR(ALIGNED);  // Enable ALIGNED mode
     
     // Generates 4 test runs (max column size):
     // Run 0: (1, 10, 100)  - all at index 0
@@ -376,19 +374,19 @@ TEST_G(MyTest, AlignedMode) {
 ```cpp
 // FULL mode: 3 × 2 × 2 = 12 runs
 TEST_G(MyTest, FullExample) {
-    USE_GENERATOR(FULL);
     auto a = GENERATOR(1, 2, 3);
     auto b = GENERATOR(10, 20);
     auto c = GENERATOR(100, 200);
+    USE_GENERATOR(FULL);
     // Generates all 12 combinations
 }
 
 // ALIGNED mode: max(3, 2, 2) = 3 runs  
 TEST_G(MyTest, AlignedExample) {
-    USE_GENERATOR(ALIGNED);
     auto a = GENERATOR(1, 2, 3);
     auto b = GENERATOR(10, 20);
     auto c = GENERATOR(100, 200);
+    USE_GENERATOR(ALIGNED);
     // Generates only 3 combinations:
     // (1, 10, 100), (2, 20, 200), (3, 10, 100)
 }

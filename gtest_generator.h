@@ -19,25 +19,25 @@ class TestWithGenerator : public ::testing::TestWithParam<int> {
 class DynamicRangeGenerator;
 
 // Global registry mapping "SuiteName.TestName" -> generator pointer
-static std::map<std::string, DynamicRangeGenerator*> g_range_map;
+inline std::map<std::string, DynamicRangeGenerator*> g_range_map;
 
 // Thread-local static variable for counting state
-static thread_local bool on_counting = false;
-static thread_local int current_count = 1;
+inline thread_local bool on_counting = false;
+inline thread_local int current_count = 1;
 
 // --- Mode toggle (default FULL = Cartesian) ---
 enum class SamplingMode { FULL, ALIGNED };
-static thread_local SamplingMode tl_mode = SamplingMode::FULL;
+inline thread_local SamplingMode tl_mode = SamplingMode::FULL;
 
 // Column sizes discovered during counting; cursor during run
-static thread_local std::vector<int> tl_col_sizes;
-static thread_local int tl_col_ix = 0;
+inline thread_local std::vector<int> tl_col_sizes;
+inline thread_local int tl_col_ix = 0;
 
 // Persist per-test column sizes so run phase can access them
-static std::map<std::string, std::vector<int>> g_colsizes_map;
+inline std::map<std::string, std::vector<int>> g_colsizes_map;
 
 // Track which tests use ALIGNED mode (set during first USE_GENERATOR call)
-static std::map<std::string, SamplingMode> g_test_modes;
+inline std::map<std::string, SamplingMode> g_test_modes;
 
 // Custom generator implementing GTest’s ParamGeneratorInterface<int>
 class DynamicRangeGenerator : public testing::internal::ParamGeneratorInterface<int> {

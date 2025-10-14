@@ -16,3 +16,7 @@ target_link_libraries(intensive_test PRIVATE gtest gtest_main pthread)
 
 add_executable(test_aligned_mode test_aligned_mode.cpp)
 target_link_libraries(test_aligned_mode PRIVATE gtest gtest_main pthread)
+
+# Multi-cpp executable to test when library is used in multiple files
+add_executable(multi_test mygen_test.cpp additional_test.cpp)
+target_link_libraries(multi_test PRIVATE gtest gtest_main pthread)

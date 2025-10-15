@@ -181,6 +181,18 @@ TEST_G(MyTest, AlignedMode) {
 - **Menos Ejecuciones**: Total de ejecuciones = tamaño máximo de columna (no el producto)
 - **Cobertura Equilibrada**: Cada valor en cada columna se usa aproximadamente por igual
 
+#### Detalles de Implementación:
+La biblioteca implementa el modo ALIGNED eficientemente usando el mecanismo `GTEST_SKIP()` de Google Test:
+1. Durante el registro de pruebas, la biblioteca cuenta el tamaño de cada columna GENERATOR
+2. En tiempo de ejecución, la biblioteca calcula el tamaño máximo de columna
+3. Las ejecuciones de prueba más allá del tamaño máximo se omiten usando `GTEST_SKIP()`
+4. Cada columna se envuelve cuando llega a su final (usando operador módulo)
+
+Este enfoque asegura que:
+- Solo se ejecutan las pruebas necesarias (no todos los productos cartesianos)
+- El recuento de pruebas reportado por Google Test refleja las pruebas realmente ejecutadas
+- No hay penalización de rendimiento por generar combinaciones innecesarias
+
 #### Cuándo Usar Cada Modo:
 - **Modo FULL**: Cuando necesitas pruebas exhaustivas de todas las combinaciones
 - **Modo ALIGNED**: Cuando quieres muestreo representativo con menos ejecuciones de prueba
@@ -196,7 +208,7 @@ TEST_G(MyTest, FullExample) {
     // Genera todas las 12 combinaciones
 }
 
-// Modo ALIGNED: max(3, 2, 2) = 3 ejecuciones  
+// Modo ALIGNED: max(3, 2, 2) = 3 ejecuciones
 TEST_G(MyTest, AlignedExample) {
     USE_GENERATOR(ALIGNED);
     auto a = GENERATOR(1, 2, 3);
@@ -206,6 +218,45 @@ TEST_G(MyTest, AlignedExample) {
     // (1, 10, 100), (2, 20, 200), (3, 10, 100)
 }
 ```
+
+#### Ejemplo de Prueba de Verificación:
+El proyecto incluye `test_mode_counts.cpp` que verifica exhaustivamente que ambos modos funcionan correctamente:
+
+```cpp
+// Prueba con configuración 3x2x2
+TEST_G(ModeCountTest, Full_3x2x2) {
+    int a = GENERATOR(1, 2, 3);        // 3 valores
+    int b = GENERATOR(10, 20);         // 2 valores
+    int c = GENERATOR(100, 200);       // 2 valores
+    USE_GENERATOR(FULL);
+
+    // Verifica: genera exactamente 12 casos de prueba (3 × 2 × 2)
+    // Todas las combinaciones son únicas
+}
+
+TEST_G(ModeCountTest, Aligned_3x2x2) {
+    int a = GENERATOR(1, 2, 3);        // 3 valores
+    int b = GENERATOR(10, 20);         // 2 valores
+    int c = GENERATOR(100, 200);       // 2 valores
+    USE_GENERATOR(ALIGNED);
+
+    // Verifica: genera exactamente 3 casos de prueba (tamaño máximo de columna)
+    // Resultados: (1,10,100), (2,20,200), (3,10,100)
+}
+```
+
+Ejecute la prueba de verificación para ver la salida detallada:
+```bash
+./build/test_mode_counts
+```
+
+La salida esperada muestra:
+- Modo FULL 3x2x2: 12 ejecuciones con todas las combinaciones únicas
+- Modo ALIGNED 3x2x2: 3 ejecuciones (tamaño máximo de columna)
+- Modo FULL 2x3x4: 24 ejecuciones con todas las combinaciones únicas
+- Modo ALIGNED 2x3x4: 4 ejecuciones (tamaño máximo de columna)
+- Modo FULL 5x1x3: 15 ejecuciones con todas las combinaciones únicas
+- Modo ALIGNED 5x1x3: 5 ejecuciones (tamaño máximo de columna)
 
 ## Referencia de API
 
@@ -285,6 +336,232 @@ Prueba: a=2, b=20
 - Todas las llamadas `GENERATOR()` deben venir antes de `USE_GENERATOR()`
 - Los tipos complejos (objetos, punteros) funcionan con GENERATOR pero pueden requerir instanciación de plantilla adecuada
 - La gestión de memoria es responsabilidad del usuario al generar punteros con `new`
+
+## Acceso a Miembros Privados para Pruebas
+
+La biblioteca proporciona una forma segura en tipos para acceder a miembros privados en pruebas sin usar `#define private public` o modificar el código de producción.
+
+### Ejemplo Rápido
+
+```cpp
+// En su clase de producción
+class MyClass {
+private:
+    int privateValue;
+    std::string privateName;
+public:
+    MyClass(int v, const std::string& n) : privateValue(v), privateName(n) {}
+
+    // Conceder acceso friend para pruebas
+    FRIEND_ACCESS_PRIVATE();
+};
+
+// En su archivo de prueba
+using TestBase = gtest_generator::TestWithGenerator;
+
+// Declarar accesores - pasar solo el nombre del campo
+DECLARE_ACCESS_PRIVATE(id1, TestBase, MyClass, privateValue);
+DECLARE_ACCESS_PRIVATE(id2, TestBase, MyClass, privateName);
+
+TEST_G(MyTest, AccessPrivate) {
+    int value = GENERATOR(10, 20);
+    USE_GENERATOR();
+
+    MyClass obj(value, "test");
+
+    // Acceder y modificar miembros privados
+    int& privateRef = ACCESS_PRIVATE(TestBase, TestBase_MyClass_privateValue,
+                                      MyClass, &obj);
+    EXPECT_EQ(privateRef, value);
+    privateRef = 100;
+    EXPECT_EQ(privateRef, 100);
+}
+```
+
+### Características Clave
+
+- **Seguridad de tipos**: Usa especialización de plantillas y declaraciones friend
+- **Cero sobrecarga**: Mecanismo completamente en tiempo de compilación
+- **Seguro para producción**: `FRIEND_ACCESS_PRIVATE()` puede definirse como macro vacía en compilaciones de producción
+- **Compartible**: El bloque de declaración (líneas 260-274 en `gtest_generator.h`) puede copiarse a encabezados comunes
+
+### Notas Importantes
+
+1. **Usar alias de tipos**: El parámetro TestCase no puede contener `::`, use `using TestBase = gtest_generator::TestWithGenerator;`
+2. **Solo nombres de campos**: Pasar solo el nombre del campo (ej., `privateValue`), no `&MyClass::privateValue`
+3. **IDs auto-generados**: Los IDs siguen el patrón `TestCase_TargetClass_MemberName` (ej., `TestBase_MyClass_privateValue`)
+
+### Uso Avanzado
+
+**Miembros Estáticos:**
+```cpp
+DECLARE_ACCESS_PRIVATE_STATIC(TestBase, MyClass, staticCounter);
+```
+
+**Funciones de Acceso Personalizadas:**
+```cpp
+DECLARE_ACCESS_PRIVATE_FUNCTION(TestBase, MyClass, CustomAccess) {
+    return target->privateField1 + target->privateField2;
+}
+```
+
+Consulte `test_private_access.cpp` y `example_common_header.h` para ejemplos completos.
+
+## Macros de Comparación de Arrays
+
+La biblioteca proporciona macros convenientes para comparar arrays elemento por elemento con mensajes de error detallados. Estas macros están construidas sobre las macros de aserción de Google Test.
+
+### Ejemplo Rápido
+
+```cpp
+TEST_G(ArrayTest, CompareArrays) {
+    USE_GENERATOR();
+
+    int expected[] = {1, 2, 3, 4, 5};
+    int actual[] = {1, 2, 3, 4, 5};
+
+    EXPECT_ARRAY_EQ(expected, actual, 5);  // Non-fatal assertion
+}
+```
+
+### Macros Disponibles
+
+#### Tipos Enteros y Genéricos
+
+- **`EXPECT_ARRAY_EQ(expected, actual, size)`** - No fatal: Compara dos arrays elemento por elemento
+  ```cpp
+  int expected[] = {1, 2, 3};
+  int actual[] = {1, 2, 3};
+  EXPECT_ARRAY_EQ(expected, actual, 3);
+  ```
+
+- **`ASSERT_ARRAY_EQ(expected, actual, size)`** - Fatal: Compara dos arrays elemento por elemento
+  ```cpp
+  std::vector<int> expected = {10, 20, 30};
+  std::vector<int> actual = {10, 20, 30};
+  ASSERT_ARRAY_EQ(expected.data(), actual.data(), 3);  // Test stops if fails
+  ```
+
+#### Tipos de Punto Flotante
+
+- **`EXPECT_ARRAY_NEAR(expected, actual, size, abs_error)`** - No fatal: Compara arrays de punto flotante con tolerancia
+  ```cpp
+  double expected[] = {1.0, 2.0, 3.0};
+  double actual[] = {1.001, 1.999, 3.002};
+  EXPECT_ARRAY_NEAR(expected, actual, 3, 0.01);  // Tolerance: 0.01
+  ```
+
+- **`ASSERT_ARRAY_NEAR(expected, actual, size, abs_error)`** - Fatal: Compara arrays de punto flotante con tolerancia
+  ```cpp
+  float expected[] = {1.5f, 2.5f, 3.5f};
+  float actual[] = {1.501f, 2.499f, 3.502f};
+  ASSERT_ARRAY_NEAR(expected, actual, 3, 0.01f);
+  ```
+
+- **`EXPECT_ARRAY_DOUBLE_EQ(expected, actual, size)`** - No fatal: Compara arrays de double con tolerancia predeterminada
+  ```cpp
+  double expected[] = {1.5, 2.5, 3.5};
+  double actual[] = {1.5, 2.5, 3.5};
+  EXPECT_ARRAY_DOUBLE_EQ(expected, actual, 3);
+  ```
+
+- **`EXPECT_ARRAY_FLOAT_EQ(expected, actual, size)`** - No fatal: Compara arrays de float con tolerancia predeterminada
+  ```cpp
+  float expected[] = {1.25f, 2.25f, 3.25f};
+  float actual[] = {1.25f, 2.25f, 3.25f};
+  EXPECT_ARRAY_FLOAT_EQ(expected, actual, 3);
+  ```
+
+### Mensajes de Error
+
+Cuando los arrays difieren, las macros proporcionan mensajes de error detallados:
+
+```cpp
+int expected[] = {1, 2, 3, 4, 5};
+int actual[] = {1, 2, 99, 4, 5};
+
+EXPECT_ARRAY_EQ(expected, actual, 5);
+// Output:
+// Expected equality of these values:
+//   (expected)[i]
+//     Which is: 3
+//   (actual)[i]
+//     Which is: 99
+// Arrays differ at index 2
+```
+
+### Trabajando con Diferentes Tipos de Contenedores
+
+```cpp
+TEST_G(ArrayTest, DifferentContainers) {
+    int size = GENERATOR(3, 5, 7);
+    USE_GENERATOR();
+
+    // C-style arrays
+    int arr1[10] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    int arr2[10] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    EXPECT_ARRAY_EQ(arr1, arr2, size);
+
+    // std::vector
+    std::vector<int> vec1(size);
+    std::vector<int> vec2(size);
+    for (int i = 0; i < size; ++i) {
+        vec1[i] = i * 10;
+        vec2[i] = i * 10;
+    }
+    EXPECT_ARRAY_EQ(vec1.data(), vec2.data(), size);
+
+    // std::array
+    std::array<int, 5> arr3 = {1, 2, 3, 4, 5};
+    std::array<int, 5> arr4 = {1, 2, 3, 4, 5};
+    EXPECT_ARRAY_EQ(arr3.data(), arr4.data(), std::min(size, 5));
+}
+```
+
+### Combinando con GENERATOR
+
+```cpp
+TEST_G(ArrayTest, ParameterizedArrayTest) {
+    int size = GENERATOR(3, 5, 10);
+    int multiplier = GENERATOR(1, 10, 100);
+    USE_GENERATOR();
+
+    std::vector<int> expected(size);
+    std::vector<int> actual(size);
+
+    for (int i = 0; i < size; ++i) {
+        expected[i] = i * multiplier;
+        actual[i] = i * multiplier;
+    }
+
+    EXPECT_ARRAY_EQ(expected.data(), actual.data(), size);
+}
+```
+
+### Características Clave
+
+- **Comparación elemento por elemento**: Cada elemento se compara individualmente
+- **Mensajes de error detallados**: Muestra qué índice difiere y los valores
+- **Funciona con cualquier tipo comparable**: int, float, double, string, tipos personalizados con operator==
+- **Mensajes de éxito**: Muestra "Arrays are equal" cuando todos los elementos coinciden
+- **Compatible con vectores y arrays**: Funciona con arrays estilo C, std::vector, std::array
+
+### Notas Importantes
+
+1. **El parámetro de tamaño es requerido**: Debe proporcionar explícitamente el tamaño del array
+2. **Fatal vs No fatal**: Use ASSERT_* para aserciones fatales, EXPECT_* para no fatales
+3. **Comparaciones de punto flotante**: Use NEAR, FLOAT_EQ, o DOUBLE_EQ para valores de punto flotante
+4. **Tipos personalizados**: Sus tipos deben tener operator== definido para EXPECT_ARRAY_EQ
+5. **Arrays de tamaño cero**: Funciona correctamente con arrays vacíos (size = 0)
+
+Consulte `test_array_compare.cpp` para ejemplos completos.
+
+## Futuras Mejoras
+
+- Cálculo dinámico del total de combinaciones
+- Soporte para diferentes tipos de datos en generadores
+- Instanciaciones de prueba con nombre
+- Soporte para patrones de valores más complejos
 
 ## Licencia
 

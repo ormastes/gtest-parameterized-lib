@@ -39,6 +39,9 @@ inline std::map<std::string, std::vector<int>> g_colsizes_map;
 // Track which tests use ALIGNED mode (set during first USE_GENERATOR call)
 inline std::map<std::string, SamplingMode> g_test_modes;
 
+// Store both full count and aligned max size for each test
+inline std::map<std::string, std::pair<int, int>> g_test_counts;  // {full_count, aligned_max}
+
 // Custom generator implementing GTest’s ParamGeneratorInterface<int>
 class DynamicRangeGenerator : public testing::internal::ParamGeneratorInterface<int> {
  public:
@@ -60,7 +63,7 @@ class DynamicRangeGenerator : public testing::internal::ParamGeneratorInterface<
         tl_mode = SamplingMode::FULL;
         test_instance->TestBody();
         int full_count = current_count;
-        
+
         // Second pass with ALIGNED mode to get column sizes
         on_counting = true;
         current_count = 1;
@@ -69,11 +72,16 @@ class DynamicRangeGenerator : public testing::internal::ParamGeneratorInterface<
         tl_mode = SamplingMode::ALIGNED;
         test_instance->TestBody();
         on_counting = false;
-        
-        // Store both counts - we'll decide which to use at runtime
+
+        // Calculate aligned max size
+        int aligned_max = 0;
+        for (int s : tl_col_sizes) aligned_max = std::max(aligned_max, s);
+
+        // Store both counts and column sizes
         g_colsizes_map[key] = tl_col_sizes;
-        
-        // For now, use the full count as max possible
+        g_test_counts[key] = {full_count, aligned_max};
+
+        // Start with full count - will be adjusted by USE_GENERATOR at runtime
         end = full_count;
         tl_col_ix = 0;
     }
@@ -256,32 +264,46 @@ inline DynamicRangeGenerator* CreateGenerator(const std::string& name) {
 // ============================================================================
 
 // Template function declaration (prevent multiple definition with #ifdef)
+// This block can be copied to a common header file for sharing across production and test code
 #ifndef GTEST_GENERATOR_ACCESS_PRIVATE_MEMBER_DEFINED
 #define GTEST_GENERATOR_ACCESS_PRIVATE_MEMBER_DEFINED
 
 template <typename ID, typename TestCase, typename Target>
 auto accessPrivateMember(TestCase* test_case, Target* target = nullptr) -> decltype(auto);
 
-#endif  // GTEST_GENERATOR_ACCESS_PRIVATE_MEMBER_DEFINED
-
 // Macro to make accessPrivateMember a friend of the target class
 // Usage: Place inside the target class definition
+// In test builds: Grants friend access to test infrastructure
+// In production builds: Empty macro (no effect)
 #define FRIEND_ACCESS_PRIVATE() \
-    template <typename, typename, typename> \
-    friend auto accessPrivateMember(auto*, auto*) -> decltype(auto)
+    template <typename _ID, typename _TC, typename _TG> \
+    friend auto accessPrivateMember(_TC*, _TG*) -> decltype(auto)
+
+#endif  // GTEST_GENERATOR_ACCESS_PRIVATE_MEMBER_DEFINED
+
+// Empty macro for production builds - define this in your production headers
+// to disable friend access when not testing
+#ifndef FRIEND_ACCESS_PRIVATE
+#define FRIEND_ACCESS_PRIVATE()
+#endif
 
 // Helper macro to concatenate tokens for ID generation
 #define CONCAT_IMPL(a, b, c) a##_##b##_##c
 #define CONCAT(a, b, c) CONCAT_IMPL(a, b, c)
 
 // Macro to declare the template function with specific types for instance members
-// Usage: Place outside class definition in test file
-// ID is automatically generated from TestCase, Target, and Member
-#define DECLARE_ACCESS_PRIVATE(TestCase, Target, Member) \
-    struct CONCAT(TestCase, Target, Member); \
+// Usage: DECLARE_ACCESS_PRIVATE(ID, TestCase, Target, memberName)
+// IMPORTANT: MemberPtr should be just the field name (e.g., privateValue), not &Target::member
+// IMPORTANT: To use CONCAT-based ID generation, TestCase must not contain '::'
+// Use a 'using' alias to avoid scope qualifiers:
+//   using MyTestCase = ::gtest_generator::TestWithGenerator;
+//   DECLARE_ACCESS_PRIVATE(ID, MyTestCase, Target, privateField)
+// ID parameter is currently ignored - CONCAT(TestCase, Target, MemberPtr) is used instead
+#define DECLARE_ACCESS_PRIVATE(ID, TestCase, Target, MemberPtr) \
+    struct CONCAT(TestCase, Target, MemberPtr); \
     template <> \
-    inline auto accessPrivateMember<CONCAT(TestCase, Target, Member), TestCase, Target>(TestCase* test_case, Target* target) -> decltype(auto) { \
-        return target->*Member; \
+    inline auto accessPrivateMember<CONCAT(TestCase, Target, MemberPtr), TestCase, Target>(TestCase* test_case, Target* target) -> decltype(auto) { \
+        return (target->MemberPtr); \
     }
 
 // Macro to declare the template function with specific types for static members
@@ -304,10 +326,10 @@ auto accessPrivateMember(TestCase* test_case, Target* target = nullptr) -> declt
 
 // Macro for calling accessPrivateMember - automatically takes 'this' as first parameter
 // Second parameter defaults to nullptr if not provided
-// Usage: ACCESS_PRIVATE(Target, &obj) or ACCESS_PRIVATE(Target)
-// ID is automatically generated from the current test class and Target
-#define ACCESS_PRIVATE(Target, ...) \
-    accessPrivateMember<CONCAT(AccessID, std::remove_pointer<decltype(this)>::type, Target), std::remove_pointer<decltype(this)>::type, Target>(this, ##__VA_ARGS__)
+// Usage: ACCESS_PRIVATE(TestCase, ID, Target, &obj) or ACCESS_PRIVATE(TestCase, ID, Target)
+// TestCase must match the type used in DECLARE_ACCESS_PRIVATE
+#define ACCESS_PRIVATE(TestCase, ID, Target, ...) \
+    accessPrivateMember<ID, TestCase, Target>(static_cast<TestCase*>(this), ##__VA_ARGS__)
 
 // ============================================================================
 
@@ -319,8 +341,39 @@ auto accessPrivateMember(TestCase* test_case, Target* target = nullptr) -> declt
     __VA_OPT__(::gtest_generator::tl_mode = ::gtest_generator::SamplingMode::__VA_ARGS__;) \
     const auto* info = ::testing::UnitTest::GetInstance()->current_test_info(); \
     if (info) { \
-      std::string key = std::string(info->test_suite_name()) + "." + info->name(); \
+      /* Parse GTest name format: "Generator/AlignedModeTest__RunCountAligned.__/0" */ \
+      /* Extract to simple format: "AlignedModeTest.RunCountAligned" */ \
+      std::string gtest_suite = info->test_suite_name(); /* "Generator/AlignedModeTest__RunCountAligned" */ \
+      std::string simple_key; \
+      size_t slash_pos = gtest_suite.find('/'); \
+      if (slash_pos != std::string::npos) { \
+        std::string suite_part = gtest_suite.substr(slash_pos + 1); /* "AlignedModeTest__RunCountAligned" */ \
+        size_t dunder_pos = suite_part.find("__"); \
+        if (dunder_pos != std::string::npos) { \
+          std::string test_class = suite_part.substr(0, dunder_pos); /* "AlignedModeTest" */ \
+          std::string test_name = suite_part.substr(dunder_pos + 2); /* "RunCountAligned" */ \
+          simple_key = test_class + "." + test_name; \
+        } \
+      } \
+      if (simple_key.empty()) simple_key = std::string(info->test_suite_name()) + "." + info->name(); \
+      \
+      std::string key = simple_key; \
       ::gtest_generator::g_test_modes[key] = ::gtest_generator::tl_mode; \
+      \
+      /* Adjust generator end value based on mode (only on first call) */ \
+      auto gen_it = ::gtest_generator::g_range_map.find(key); \
+      auto count_it = ::gtest_generator::g_test_counts.find(key); \
+      if (gen_it != ::gtest_generator::g_range_map.end() && \
+          count_it != ::gtest_generator::g_test_counts.end()) { \
+        auto* gen = gen_it->second; \
+        const auto& counts = count_it->second; \
+        if (::gtest_generator::tl_mode == ::gtest_generator::SamplingMode::ALIGNED) { \
+          gen->end = counts.second; /* Use aligned_max */ \
+        } else { \
+          gen->end = counts.first; /* Use full_count */ \
+        } \
+      } \
+      \
       if (::gtest_generator::tl_mode == ::gtest_generator::SamplingMode::ALIGNED) { \
         auto it = ::gtest_generator::g_colsizes_map.find(key); \
         if (it != ::gtest_generator::g_colsizes_map.end() && !it->second.empty()) { \
@@ -332,8 +385,10 @@ auto accessPrivateMember(TestCase* test_case, Target* target = nullptr) -> declt
         } \
       } \
     } \
-    ::gtest_generator::tl_col_sizes.clear(); \
-    ::gtest_generator::tl_col_ix = 0; \
+    if (!::gtest_generator::on_counting) { \
+      ::gtest_generator::tl_col_sizes.clear(); \
+      ::gtest_generator::tl_col_ix = 0; \
+    } \
   } while(0); \
   if (gtest_generator::IsCountingMode(*this)) return;
 
@@ -349,4 +404,90 @@ auto accessPrivateMember(TestCase* test_case, Target* target = nullptr) -> declt
     INSTANTIATE_TEST_SUITE_P(Generator, TestClassName##__##TestName, \
         testing::internal::ParamGenerator<int>(__gtest_generator__get_generator_##TestClassName##TestName())); \
     TEST_P(TestClassName##__##TestName, __)
+
+// ============================================================================
+// Array Comparison Macros
+// ============================================================================
+
+// Compare two arrays element by element (non-fatal)
+// Usage: EXPECT_ARRAY_EQ(expected, actual, size)
+#define EXPECT_ARRAY_EQ(expected, actual, size) \
+  do { \
+    bool all_equal = true; \
+    for (size_t i = 0; i < (size); ++i) { \
+      if ((expected)[i] != (actual)[i]) { \
+        all_equal = false; \
+        EXPECT_EQ((expected)[i], (actual)[i]) << "Arrays differ at index " << i; \
+      } \
+    } \
+    if (all_equal) { \
+      SUCCEED() << "Arrays are equal (size: " << (size) << ")"; \
+    } \
+  } while(0)
+
+// Compare two arrays element by element (fatal)
+// Usage: ASSERT_ARRAY_EQ(expected, actual, size)
+#define ASSERT_ARRAY_EQ(expected, actual, size) \
+  do { \
+    for (size_t i = 0; i < (size); ++i) { \
+      ASSERT_EQ((expected)[i], (actual)[i]) << "Arrays differ at index " << i; \
+    } \
+  } while(0)
+
+// Compare two floating-point arrays with tolerance (non-fatal)
+// Usage: EXPECT_ARRAY_NEAR(expected, actual, size, abs_error)
+#define EXPECT_ARRAY_NEAR(expected, actual, size, abs_error) \
+  do { \
+    bool all_near = true; \
+    for (size_t i = 0; i < (size); ++i) { \
+      if (std::abs((expected)[i] - (actual)[i]) > (abs_error)) { \
+        all_near = false; \
+        EXPECT_NEAR((expected)[i], (actual)[i], (abs_error)) << "Arrays differ at index " << i; \
+      } \
+    } \
+    if (all_near) { \
+      SUCCEED() << "Arrays are near (size: " << (size) << ", tolerance: " << (abs_error) << ")"; \
+    } \
+  } while(0)
+
+// Compare two floating-point arrays with tolerance (fatal)
+// Usage: ASSERT_ARRAY_NEAR(expected, actual, size, abs_error)
+#define ASSERT_ARRAY_NEAR(expected, actual, size, abs_error) \
+  do { \
+    for (size_t i = 0; i < (size); ++i) { \
+      ASSERT_NEAR((expected)[i], (actual)[i], (abs_error)) << "Arrays differ at index " << i; \
+    } \
+  } while(0)
+
+// Compare two double arrays with default tolerance (non-fatal)
+// Usage: EXPECT_ARRAY_DOUBLE_EQ(expected, actual, size)
+#define EXPECT_ARRAY_DOUBLE_EQ(expected, actual, size) \
+  do { \
+    bool all_equal = true; \
+    for (size_t i = 0; i < (size); ++i) { \
+      if ((expected)[i] != (actual)[i]) { \
+        all_equal = false; \
+        EXPECT_DOUBLE_EQ((expected)[i], (actual)[i]) << "Arrays differ at index " << i; \
+      } \
+    } \
+    if (all_equal) { \
+      SUCCEED() << "Double arrays are equal (size: " << (size) << ")"; \
+    } \
+  } while(0)
+
+// Compare two float arrays with default tolerance (non-fatal)
+// Usage: EXPECT_ARRAY_FLOAT_EQ(expected, actual, size)
+#define EXPECT_ARRAY_FLOAT_EQ(expected, actual, size) \
+  do { \
+    bool all_equal = true; \
+    for (size_t i = 0; i < (size); ++i) { \
+      if ((expected)[i] != (actual)[i]) { \
+        all_equal = false; \
+        EXPECT_FLOAT_EQ((expected)[i], (actual)[i]) << "Arrays differ at index " << i; \
+      } \
+    } \
+    if (all_equal) { \
+      SUCCEED() << "Float arrays are equal (size: " << (size) << ")"; \
+    } \
+  } while(0)
 

@@ -181,6 +181,18 @@ TEST_G(MyTest, AlignedMode) {
 - **実行数が少ない**: 総実行数 = 最大列サイズ（積ではない）
 - **バランスの取れたカバレッジ**: 各列の各値がほぼ同じように使用されます
 
+#### 実装の詳細：
+ライブラリはGoogle Testの`GTEST_SKIP()`メカニズムを使用してALIGNEDモードを効率的に実装します：
+1. テスト登録時に、ライブラリは各GENERATOR列のサイズをカウントします
+2. 実行時に、ライブラリは最大列サイズを計算します
+3. 最大サイズを超えるテスト実行は`GTEST_SKIP()`を使用してスキップされます
+4. 各列は終端に達すると最初に戻ります（モジュロ演算子を使用）
+
+このアプローチにより以下が保証されます：
+- 必要なテスト実行のみが実行されます（すべての直積積ではありません）
+- Google Testが報告するテスト数は実際に実行されたテストを反映します
+- 不要な組み合わせ生成によるパフォーマンスペナルティがありません
+
 #### 各モードをいつ使うか：
 - **FULLモード**: すべての組み合わせの徹底的なテストが必要な場合
 - **ALIGNEDモード**: より少ないテスト実行で代表的なサンプリングを望む場合
@@ -206,6 +218,45 @@ TEST_G(MyTest, AlignedExample) {
     // (1, 10, 100), (2, 20, 200), (3, 10, 100)
 }
 ```
+
+#### 検証テストの例：
+プロジェクトには、両方のモードが正しく動作することを包括的に検証する`test_mode_counts.cpp`が含まれています：
+
+```cpp
+// 3x2x2構成でのテスト
+TEST_G(ModeCountTest, Full_3x2x2) {
+    int a = GENERATOR(1, 2, 3);        // 3つの値
+    int b = GENERATOR(10, 20);         // 2つの値
+    int c = GENERATOR(100, 200);       // 2つの値
+    USE_GENERATOR(FULL);
+
+    // 検証：正確に12のテストケースを生成 (3 × 2 × 2)
+    // すべての組み合わせはユニーク
+}
+
+TEST_G(ModeCountTest, Aligned_3x2x2) {
+    int a = GENERATOR(1, 2, 3);        // 3つの値
+    int b = GENERATOR(10, 20);         // 2つの値
+    int c = GENERATOR(100, 200);       // 2つの値
+    USE_GENERATOR(ALIGNED);
+
+    // 検証：正確に3のテストケースを生成（最大列サイズ）
+    // 結果：(1,10,100), (2,20,200), (3,10,100)
+}
+```
+
+詳細な出力を確認するために検証テストを実行します：
+```bash
+./build/test_mode_counts
+```
+
+期待される出力には以下が表示されます：
+- FULLモード 3x2x2: 12回実行（すべてのユニークな組み合わせ）
+- ALIGNEDモード 3x2x2: 3回実行（最大列サイズ）
+- FULLモード 2x3x4: 24回実行（すべてのユニークな組み合わせ）
+- ALIGNEDモード 2x3x4: 4回実行（最大列サイズ）
+- FULLモード 5x1x3: 15回実行（すべてのユニークな組み合わせ）
+- ALIGNEDモード 5x1x3: 5回実行（最大列サイズ）
 
 ## APIリファレンス
 
@@ -285,6 +336,232 @@ TEST_G(MyTest, Example) {
 - すべての`GENERATOR()`呼び出しは`USE_GENERATOR()`の前に来る必要があります
 - 複雑な型（オブジェクト、ポインタ）はGENERATORで動作しますが、適切なテンプレートのインスタンス化が必要な場合があります
 - `new`でポインタを生成する際のメモリ管理はユーザーの責任です
+
+## テスト用のプライベートメンバーアクセス
+
+ライブラリは、`#define private public`を使用したり本番コードを変更したりすることなく、テストでプライベートメンバーにアクセスする型安全な方法を提供します。
+
+### クイック例
+
+```cpp
+// 本番クラス内
+class MyClass {
+private:
+    int privateValue;
+    std::string privateName;
+public:
+    MyClass(int v, const std::string& n) : privateValue(v), privateName(n) {}
+
+    // テスト用のfriendアクセスを許可
+    FRIEND_ACCESS_PRIVATE();
+};
+
+// テストファイル内
+using TestBase = gtest_generator::TestWithGenerator;
+
+// アクセサを宣言 - フィールド名だけを渡す
+DECLARE_ACCESS_PRIVATE(id1, TestBase, MyClass, privateValue);
+DECLARE_ACCESS_PRIVATE(id2, TestBase, MyClass, privateName);
+
+TEST_G(MyTest, AccessPrivate) {
+    int value = GENERATOR(10, 20);
+    USE_GENERATOR();
+
+    MyClass obj(value, "test");
+
+    // プライベートメンバーへのアクセスと変更
+    int& privateRef = ACCESS_PRIVATE(TestBase, TestBase_MyClass_privateValue,
+                                      MyClass, &obj);
+    EXPECT_EQ(privateRef, value);
+    privateRef = 100;
+    EXPECT_EQ(privateRef, 100);
+}
+```
+
+### 主な機能
+
+- **型安全**: テンプレート特殊化とfriend宣言を使用
+- **ゼロオーバーヘッド**: 完全なコンパイル時メカニズム
+- **本番環境で安全**: `FRIEND_ACCESS_PRIVATE()`は本番ビルドで空のマクロとして定義可能
+- **共有可能**: 宣言ブロック（`gtest_generator.h`の260-274行）を共通ヘッダーにコピー可能
+
+### 重要な注意事項
+
+1. **型エイリアスを使用**: TestCaseパラメータは`::`を含めることができないため、`using TestBase = gtest_generator::TestWithGenerator;`を使用
+2. **フィールド名のみ**: フィールド名のみを渡す（例：`privateValue`）、`&MyClass::privateValue`ではない
+3. **自動生成ID**: IDは`TestCase_TargetClass_MemberName`のパターンに従う（例：`TestBase_MyClass_privateValue`）
+
+### 高度な使用法
+
+**静的メンバー：**
+```cpp
+DECLARE_ACCESS_PRIVATE_STATIC(TestBase, MyClass, staticCounter);
+```
+
+**カスタムアクセサ関数：**
+```cpp
+DECLARE_ACCESS_PRIVATE_FUNCTION(TestBase, MyClass, CustomAccess) {
+    return target->privateField1 + target->privateField2;
+}
+```
+
+完全な例については、`test_private_access.cpp`と`example_common_header.h`を参照してください。
+
+## 配列比較マクロ
+
+このライブラリは、詳細なエラーメッセージとともに配列を要素ごとに比較するための便利なマクロを提供します。これらのマクロはGoogle Testのアサーションマクロの上に構築されています。
+
+### クイック例
+
+```cpp
+TEST_G(ArrayTest, CompareArrays) {
+    USE_GENERATOR();
+
+    int expected[] = {1, 2, 3, 4, 5};
+    int actual[] = {1, 2, 3, 4, 5};
+
+    EXPECT_ARRAY_EQ(expected, actual, 5);  // Non-fatal assertion
+}
+```
+
+### 利用可能なマクロ
+
+#### 整数型と汎用型
+
+- **`EXPECT_ARRAY_EQ(expected, actual, size)`** - 非致命的：2つの配列を要素ごとに比較
+  ```cpp
+  int expected[] = {1, 2, 3};
+  int actual[] = {1, 2, 3};
+  EXPECT_ARRAY_EQ(expected, actual, 3);
+  ```
+
+- **`ASSERT_ARRAY_EQ(expected, actual, size)`** - 致命的：2つの配列を要素ごとに比較
+  ```cpp
+  std::vector<int> expected = {10, 20, 30};
+  std::vector<int> actual = {10, 20, 30};
+  ASSERT_ARRAY_EQ(expected.data(), actual.data(), 3);  // Test stops if fails
+  ```
+
+#### 浮動小数点型
+
+- **`EXPECT_ARRAY_NEAR(expected, actual, size, abs_error)`** - 非致命的：許容誤差を使用して浮動小数点配列を比較
+  ```cpp
+  double expected[] = {1.0, 2.0, 3.0};
+  double actual[] = {1.001, 1.999, 3.002};
+  EXPECT_ARRAY_NEAR(expected, actual, 3, 0.01);  // Tolerance: 0.01
+  ```
+
+- **`ASSERT_ARRAY_NEAR(expected, actual, size, abs_error)`** - 致命的：許容誤差を使用して浮動小数点配列を比較
+  ```cpp
+  float expected[] = {1.5f, 2.5f, 3.5f};
+  float actual[] = {1.501f, 2.499f, 3.502f};
+  ASSERT_ARRAY_NEAR(expected, actual, 3, 0.01f);
+  ```
+
+- **`EXPECT_ARRAY_DOUBLE_EQ(expected, actual, size)`** - 非致命的：デフォルトの許容誤差でdouble配列を比較
+  ```cpp
+  double expected[] = {1.5, 2.5, 3.5};
+  double actual[] = {1.5, 2.5, 3.5};
+  EXPECT_ARRAY_DOUBLE_EQ(expected, actual, 3);
+  ```
+
+- **`EXPECT_ARRAY_FLOAT_EQ(expected, actual, size)`** - 非致命的：デフォルトの許容誤差でfloat配列を比較
+  ```cpp
+  float expected[] = {1.25f, 2.25f, 3.25f};
+  float actual[] = {1.25f, 2.25f, 3.25f};
+  EXPECT_ARRAY_FLOAT_EQ(expected, actual, 3);
+  ```
+
+### エラーメッセージ
+
+配列が異なる場合、マクロは詳細なエラーメッセージを提供します：
+
+```cpp
+int expected[] = {1, 2, 3, 4, 5};
+int actual[] = {1, 2, 99, 4, 5};
+
+EXPECT_ARRAY_EQ(expected, actual, 5);
+// Output:
+// Expected equality of these values:
+//   (expected)[i]
+//     Which is: 3
+//   (actual)[i]
+//     Which is: 99
+// Arrays differ at index 2
+```
+
+### 異なるコンテナ型の操作
+
+```cpp
+TEST_G(ArrayTest, DifferentContainers) {
+    int size = GENERATOR(3, 5, 7);
+    USE_GENERATOR();
+
+    // C-style arrays
+    int arr1[10] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    int arr2[10] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    EXPECT_ARRAY_EQ(arr1, arr2, size);
+
+    // std::vector
+    std::vector<int> vec1(size);
+    std::vector<int> vec2(size);
+    for (int i = 0; i < size; ++i) {
+        vec1[i] = i * 10;
+        vec2[i] = i * 10;
+    }
+    EXPECT_ARRAY_EQ(vec1.data(), vec2.data(), size);
+
+    // std::array
+    std::array<int, 5> arr3 = {1, 2, 3, 4, 5};
+    std::array<int, 5> arr4 = {1, 2, 3, 4, 5};
+    EXPECT_ARRAY_EQ(arr3.data(), arr4.data(), std::min(size, 5));
+}
+```
+
+### GENERATORとの組み合わせ
+
+```cpp
+TEST_G(ArrayTest, ParameterizedArrayTest) {
+    int size = GENERATOR(3, 5, 10);
+    int multiplier = GENERATOR(1, 10, 100);
+    USE_GENERATOR();
+
+    std::vector<int> expected(size);
+    std::vector<int> actual(size);
+
+    for (int i = 0; i < size; ++i) {
+        expected[i] = i * multiplier;
+        actual[i] = i * multiplier;
+    }
+
+    EXPECT_ARRAY_EQ(expected.data(), actual.data(), size);
+}
+```
+
+### 主な機能
+
+- **要素ごとの比較**：各要素が個別に比較されます
+- **詳細なエラーメッセージ**：どのインデックスが異なるかと値を表示します
+- **任意の比較可能な型に対応**：int、float、double、string、operator==を持つカスタム型
+- **成功メッセージ**：すべての要素が一致した場合に「Arrays are equal」を表示します
+- **ベクターと配列に対応**：C言語スタイルの配列、std::vector、std::arrayで動作します
+
+### 重要な注意事項
+
+1. **サイズパラメータは必須**：配列のサイズを明示的に提供する必要があります
+2. **致命的 vs 非致命的**：致命的なアサーションにはASSERT_*を、非致命的なアサーションにはEXPECT_*を使用してください
+3. **浮動小数点の比較**：浮動小数点値にはNEAR、FLOAT_EQ、またはDOUBLE_EQを使用してください
+4. **カスタム型**：EXPECT_ARRAY_EQを使用するには、型にoperator==が定義されている必要があります
+5. **サイズゼロの配列**：空の配列（size = 0）で正しく動作します
+
+完全な例については、`test_array_compare.cpp`を参照してください。
+
+## 今後の改善
+
+- 総組み合わせ数の動的計算
+- ジェネレータでの異なるデータ型のサポート
+- 名前付きテストインスタンス化
+- より複雑な値パターンのサポート
 
 ## ライセンス
 

@@ -181,6 +181,18 @@ TEST_G(MyTest, AlignedMode) {
 - **更少运行**：总运行次数 = 最大列大小（不是乘积）
 - **平衡覆盖**：每列中的每个值都被近似平等使用
 
+#### 实现细节：
+库使用Google Test的`GTEST_SKIP()`机制高效实现ALIGNED模式：
+1. 在测试注册期间，库统计每个GENERATOR列的大小
+2. 在运行时，库计算最大列大小
+3. 超出最大大小的测试运行使用`GTEST_SKIP()`跳过
+4. 每列到达末尾时循环回到开头（使用模运算符）
+
+这种方法确保：
+- 只执行必要的测试运行（而不是所有笛卡尔乘积）
+- Google Test报告的测试数量反映实际执行的测试
+- 没有因生成不必要组合而产生的性能损失
+
 #### 何时使用各种模式：
 - **FULL模式**：当您需要所有组合的穷尽测试时
 - **ALIGNED模式**：当您希望用更少的测试运行进行代表性采样时
@@ -196,7 +208,7 @@ TEST_G(MyTest, FullExample) {
     // 生成所有 12 个组合
 }
 
-// ALIGNED模式： max(3, 2, 2) = 3 次运行  
+// ALIGNED模式： max(3, 2, 2) = 3 次运行
 TEST_G(MyTest, AlignedExample) {
     USE_GENERATOR(ALIGNED);
     auto a = GENERATOR(1, 2, 3);
@@ -206,6 +218,45 @@ TEST_G(MyTest, AlignedExample) {
     // (1, 10, 100), (2, 20, 200), (3, 10, 100)
 }
 ```
+
+#### 验证测试示例：
+项目包含`test_mode_counts.cpp`，全面验证两种模式的正确工作：
+
+```cpp
+// 使用3x2x2配置进行测试
+TEST_G(ModeCountTest, Full_3x2x2) {
+    int a = GENERATOR(1, 2, 3);        // 3个值
+    int b = GENERATOR(10, 20);         // 2个值
+    int c = GENERATOR(100, 200);       // 2个值
+    USE_GENERATOR(FULL);
+
+    // 验证：生成恰好12个测试用例 (3 × 2 × 2)
+    // 所有组合都是唯一的
+}
+
+TEST_G(ModeCountTest, Aligned_3x2x2) {
+    int a = GENERATOR(1, 2, 3);        // 3个值
+    int b = GENERATOR(10, 20);         // 2个值
+    int c = GENERATOR(100, 200);       // 2个值
+    USE_GENERATOR(ALIGNED);
+
+    // 验证：生成恰好3个测试用例（最大列大小）
+    // 结果：(1,10,100), (2,20,200), (3,10,100)
+}
+```
+
+运行验证测试以查看详细输出：
+```bash
+./build/test_mode_counts
+```
+
+预期输出显示：
+- FULL模式 3x2x2：12次运行（所有唯一组合）
+- ALIGNED模式 3x2x2：3次运行（最大列大小）
+- FULL模式 2x3x4：24次运行（所有唯一组合）
+- ALIGNED模式 2x3x4：4次运行（最大列大小）
+- FULL模式 5x1x3：15次运行（所有唯一组合）
+- ALIGNED模式 5x1x3：5次运行（最大列大小）
 
 ## API参考
 
@@ -285,6 +336,225 @@ TEST_G(MyTest, Example) {
 - 所有`GENERATOR()`调用必须在`USE_GENERATOR()`之前
 - 复杂类型（对象、指针）可以与GENERATOR一起使用，但可能需要适当的模板实例化
 - 使用`new`生成指针时，内存管理是用户的责任
+
+## 测试中的私有成员访问
+
+该库提供了一种类型安全的方式来访问测试中的私有成员，而无需使用`#define private public`或修改生产代码。
+
+### 快速示例
+
+```cpp
+// 在您的生产类中
+class MyClass {
+private:
+    int privateValue;
+    std::string privateName;
+public:
+    MyClass(int v, const std::string& n) : privateValue(v), privateName(n) {}
+
+    // 授予测试的友元访问权限
+    FRIEND_ACCESS_PRIVATE();
+};
+
+// 在您的测试文件中
+using TestBase = gtest_generator::TestWithGenerator;
+
+// 声明访问器 - 只传递字段名称
+DECLARE_ACCESS_PRIVATE(id1, TestBase, MyClass, privateValue);
+DECLARE_ACCESS_PRIVATE(id2, TestBase, MyClass, privateName);
+
+TEST_G(MyTest, AccessPrivate) {
+    int value = GENERATOR(10, 20);
+    USE_GENERATOR();
+
+    MyClass obj(value, "test");
+
+    // 访问和修改私有成员
+    int& privateRef = ACCESS_PRIVATE(TestBase, TestBase_MyClass_privateValue,
+                                      MyClass, &obj);
+    EXPECT_EQ(privateRef, value);
+    privateRef = 100;
+    EXPECT_EQ(privateRef, 100);
+}
+```
+
+### 主要特性
+
+- **类型安全**：使用模板特化和友元声明
+- **零开销**：完全的编译时机制
+- **生产安全**：在生产构建中，`FRIEND_ACCESS_PRIVATE()`可以定义为空宏
+- **可共享**：声明块（`gtest_generator.h`中的第260-274行）可以复制到通用头文件中
+
+### 重要说明
+
+1. **使用类型别名**：TestCase参数不能包含`::`，请使用`using TestBase = gtest_generator::TestWithGenerator;`
+2. **仅字段名称**：只传递字段名称（例如`privateValue`），而不是`&MyClass::privateValue`
+3. **自动生成的ID**：ID遵循模式`TestCase_TargetClass_MemberName`（例如`TestBase_MyClass_privateValue`）
+
+### 高级用法
+
+**静态成员：**
+```cpp
+DECLARE_ACCESS_PRIVATE_STATIC(TestBase, MyClass, staticCounter);
+```
+
+**自定义访问器函数：**
+```cpp
+DECLARE_ACCESS_PRIVATE_FUNCTION(TestBase, MyClass, CustomAccess) {
+    return target->privateField1 + target->privateField2;
+}
+```
+
+有关完整示例，请参见`test_private_access.cpp`和`example_common_header.h`。
+
+## 数组比较宏
+
+该库提供了方便的宏，用于逐元素比较数组并提供详细的错误消息。这些宏构建在Google Test的断言宏之上。
+
+### 快速示例
+
+```cpp
+TEST_G(ArrayTest, CompareArrays) {
+    USE_GENERATOR();
+
+    int expected[] = {1, 2, 3, 4, 5};
+    int actual[] = {1, 2, 3, 4, 5};
+
+    EXPECT_ARRAY_EQ(expected, actual, 5);  // Non-fatal assertion
+}
+```
+
+### 可用的宏
+
+#### 整数和通用类型
+
+- **`EXPECT_ARRAY_EQ(expected, actual, size)`** - 非致命：逐元素比较两个数组
+  ```cpp
+  int expected[] = {1, 2, 3};
+  int actual[] = {1, 2, 3};
+  EXPECT_ARRAY_EQ(expected, actual, 3);
+  ```
+
+- **`ASSERT_ARRAY_EQ(expected, actual, size)`** - 致命：逐元素比较两个数组
+  ```cpp
+  std::vector<int> expected = {10, 20, 30};
+  std::vector<int> actual = {10, 20, 30};
+  ASSERT_ARRAY_EQ(expected.data(), actual.data(), 3);  // Test stops if fails
+  ```
+
+#### 浮点类型
+
+- **`EXPECT_ARRAY_NEAR(expected, actual, size, abs_error)`** - 非致命：使用容差比较浮点数组
+  ```cpp
+  double expected[] = {1.0, 2.0, 3.0};
+  double actual[] = {1.001, 1.999, 3.002};
+  EXPECT_ARRAY_NEAR(expected, actual, 3, 0.01);  // Tolerance: 0.01
+  ```
+
+- **`ASSERT_ARRAY_NEAR(expected, actual, size, abs_error)`** - 致命：使用容差比较浮点数组
+  ```cpp
+  float expected[] = {1.5f, 2.5f, 3.5f};
+  float actual[] = {1.501f, 2.499f, 3.502f};
+  ASSERT_ARRAY_NEAR(expected, actual, 3, 0.01f);
+  ```
+
+- **`EXPECT_ARRAY_DOUBLE_EQ(expected, actual, size)`** - 非致命：使用默认容差比较double数组
+  ```cpp
+  double expected[] = {1.5, 2.5, 3.5};
+  double actual[] = {1.5, 2.5, 3.5};
+  EXPECT_ARRAY_DOUBLE_EQ(expected, actual, 3);
+  ```
+
+- **`EXPECT_ARRAY_FLOAT_EQ(expected, actual, size)`** - 非致命：使用默认容差比较float数组
+  ```cpp
+  float expected[] = {1.25f, 2.25f, 3.25f};
+  float actual[] = {1.25f, 2.25f, 3.25f};
+  EXPECT_ARRAY_FLOAT_EQ(expected, actual, 3);
+  ```
+
+### 错误消息
+
+当数组不同时，宏会提供详细的错误消息：
+
+```cpp
+int expected[] = {1, 2, 3, 4, 5};
+int actual[] = {1, 2, 99, 4, 5};
+
+EXPECT_ARRAY_EQ(expected, actual, 5);
+// Output:
+// Expected equality of these values:
+//   (expected)[i]
+//     Which is: 3
+//   (actual)[i]
+//     Which is: 99
+// Arrays differ at index 2
+```
+
+### 使用不同的容器类型
+
+```cpp
+TEST_G(ArrayTest, DifferentContainers) {
+    int size = GENERATOR(3, 5, 7);
+    USE_GENERATOR();
+
+    // C-style arrays
+    int arr1[10] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    int arr2[10] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    EXPECT_ARRAY_EQ(arr1, arr2, size);
+
+    // std::vector
+    std::vector<int> vec1(size);
+    std::vector<int> vec2(size);
+    for (int i = 0; i < size; ++i) {
+        vec1[i] = i * 10;
+        vec2[i] = i * 10;
+    }
+    EXPECT_ARRAY_EQ(vec1.data(), vec2.data(), size);
+
+    // std::array
+    std::array<int, 5> arr3 = {1, 2, 3, 4, 5};
+    std::array<int, 5> arr4 = {1, 2, 3, 4, 5};
+    EXPECT_ARRAY_EQ(arr3.data(), arr4.data(), std::min(size, 5));
+}
+```
+
+### 与GENERATOR结合使用
+
+```cpp
+TEST_G(ArrayTest, ParameterizedArrayTest) {
+    int size = GENERATOR(3, 5, 10);
+    int multiplier = GENERATOR(1, 10, 100);
+    USE_GENERATOR();
+
+    std::vector<int> expected(size);
+    std::vector<int> actual(size);
+
+    for (int i = 0; i < size; ++i) {
+        expected[i] = i * multiplier;
+        actual[i] = i * multiplier;
+    }
+
+    EXPECT_ARRAY_EQ(expected.data(), actual.data(), size);
+}
+```
+
+### 主要特性
+
+- **逐元素比较**：每个元素都单独比较
+- **详细的错误消息**：显示哪个索引不同以及对应的值
+- **适用于任何可比较类型**：int、float、double、string、具有operator==的自定义类型
+- **成功消息**：当所有元素匹配时显示"Arrays are equal"
+- **兼容向量和数组**：适用于C风格数组、std::vector、std::array
+
+### 重要说明
+
+1. **必须提供size参数**：您必须显式提供数组大小
+2. **致命 vs 非致命**：使用ASSERT_*进行致命断言，使用EXPECT_*进行非致命断言
+3. **浮点数比较**：对浮点值使用NEAR、FLOAT_EQ或DOUBLE_EQ
+4. **自定义类型**：您的类型必须定义operator==才能使用EXPECT_ARRAY_EQ
+5. **零大小数组**：可以正确处理空数组（size = 0）
+
+有关完整示例，请参见`test_array_compare.cpp`。
 
 ## 许可证
 

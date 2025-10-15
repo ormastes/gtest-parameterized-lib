@@ -26,6 +26,18 @@ target_link_libraries(test_array_compare PRIVATE gtest gtest_main pthread)
 add_executable(test_mode_counts test_mode_counts.cpp)
 target_link_libraries(test_mode_counts PRIVATE gtest gtest_main pthread)
 
+add_executable(test_define_macros test_define_macros.cpp)
+target_link_libraries(test_define_macros PRIVATE gtest gtest_main pthread)
+
+add_executable(test_error_handling test_error_handling.cpp)
+target_link_libraries(test_error_handling PRIVATE gtest gtest_main pthread)
+
+add_executable(test_aligned_debug test_aligned_debug.cpp)
+target_link_libraries(test_aligned_debug PRIVATE gtest gtest_main pthread)
+
+add_executable(test_simple_aligned test_simple_aligned.cpp)
+target_link_libraries(test_simple_aligned PRIVATE gtest gtest_main pthread)
+
 # Multi-cpp executable to test when library is used in multiple files
 add_executable(multi_test mygen_test.cpp additional_test.cpp)
 target_link_libraries(multi_test PRIVATE gtest gtest_main pthread)

@@ -577,9 +577,9 @@ TEST_G(MyTest, AccessPrivate) {
 
 | Macro | Purpose | Parameters | Example |
 |-------|---------|------------|---------|
-| `GTESTG_PRIVATE_DECLARE_MEMBER` | Access instance members | Target, MemberName | `GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateField)` |
-| `GTESTG_PRIVATE_DECLARE_STATIC` | Access static members | Target, MemberName | `GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter)` |
-| `GTESTG_PRIVATE_DECLARE_FUNCTION` | Custom accessor function | TestCase, Target, FuncName | `GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum)` |
+| `GTESTG_PRIVATE_DECLARE_MEMBER` | Declare access to instance members | Target, MemberName | `GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateField)` |
+| `GTESTG_PRIVATE_DECLARE_STATIC` | Declare access to static members | Target, MemberName | `GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter)` |
+| `GTESTG_PRIVATE_DECLARE_FUNCTION` | Declare custom accessor function | ThisClass, Target, FuncName | `GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum)` |
 
 #### Accessing Members
 
@@ -587,7 +587,8 @@ TEST_G(MyTest, AccessPrivate) {
 |-------|---------|------------|---------|
 | `GTESTG_PRIVATE_MEMBER` | Access instance member | Target, MemberName, &obj | `GTESTG_PRIVATE_MEMBER(MyClass, privateField, &obj)` |
 | `GTESTG_PRIVATE_STATIC` | Access static member | Target, MemberName | `GTESTG_PRIVATE_STATIC(MyClass, staticCounter)` |
-| `GTESTG_PRIVATE_CALL` | Call custom function | TestCase, Target, FuncName, &obj | `GTESTG_PRIVATE_CALL(MyTest, MyClass, GetSum, &obj)` |
+| `GTESTG_PRIVATE_CALL` | Call custom function with explicit test object | Target, FuncName, test_obj, &obj | `GTESTG_PRIVATE_CALL(MyClass, GetSum, *this, &obj)` |
+| `GTESTG_PRIVATE_CALL_ON_TEST` | Call custom function (uses implicit 'this') | ThisClass, Target, FuncName, &obj | `GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj)` |
 
 ### Usage Examples
 
@@ -613,16 +614,30 @@ count++;  // Can modify
 
 **Custom Functions:**
 ```cpp
-// Declare with custom logic (test_case provides test context)
+// Declare with custom logic
+// THIS provides test context, TARGET is the object being accessed
 GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum) {
-    // Access test parameter if needed: test_case->GetParam()
-    // Access target object: target->field1, target->field2
-    return target->field1 + target->field2;
+    // Access test parameter if needed: THIS->GetParam()
+    // Access target object: TARGET->field1, TARGET->field2
+    return TARGET->field1 + TARGET->field2;
 }
 
 // Call from within TEST_G(MyTest, ...)
-int sum = GTESTG_PRIVATE_CALL(MyTest, MyClass, GetSum, &obj);
+// Option 1: Use implicit 'this' with CALL_ON_TEST
+int sum1 = GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj);
+
+// Option 2: Pass test object explicitly with CALL
+int sum2 = GTESTG_PRIVATE_CALL(MyClass, GetSum, *this, &obj);
 ```
+
+**Parameter Names in Custom Functions:**
+- `THIS` - Pointer to the test fixture instance (provides test context like `GetParam()`)
+- `TARGET` - Pointer to the object whose private members you're accessing
+
+**Implementation Notes:**
+- The library uses template specialization with friend declarations for type-safe access
+- Column index tracking in ALIGNED mode automatically resets between test parameters (fixed in recent version)
+- All macros use the `GTESTG_` prefix to avoid naming conflicts
 
 See `test_private_access.cpp` and `example_common_header.h` for complete examples.
 

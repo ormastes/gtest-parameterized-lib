@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./mygen_test.exe)",
+      "Bash(./test_aligned_mode.exe)",
+      "Bash(./test_mode_counts.exe)",
+      "Bash(cmake:*)",
+      "Bash(./test_error_handling.exe)",
+      "Bash(./test_private_access.exe)",
+      "Bash(./build/test_aligned_debug.exe)",
+      "Bash(./build/test_mode_counts.exe)",
+      "Bash(./build/test_simple_aligned.exe)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

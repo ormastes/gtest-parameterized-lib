@@ -382,27 +382,77 @@ TEST_G(MyTest, AccessPrivate) {
 - **Type-safe**: Usa specializzazione template e dichiarazioni friend
 - **Zero overhead**: Meccanismo completamente compile-time
 - **Sicuro per la produzione**: `GTESTG_FRIEND_ACCESS_PRIVATE()` può essere definito come macro vuota nelle build di produzione
-- **Condivisibile**: Il blocco di dichiarazione (linee 260-274 in `gtest_generator.h`) può essere copiato negli header comuni
+- **Condivisibile**: Il blocco di dichiarazione può essere copiato negli header comuni
+- **Con namespace**: Tutte le macro e funzioni usano il prefisso `GTESTG_` per prevenire conflitti di nomi
+- **API semplice**: Parametri minimi, sintassi pulita
 
+### Riferimento API
+
+#### Dichiarare l'Accesso
+
+| Macro | Scopo | Parametri | Esempio |
+|-------|---------|------------|---------|
+| `GTESTG_PRIVATE_DECLARE_MEMBER` | Accede ai membri di istanza | Target, MemberName | `GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateField)` |
+| `GTESTG_PRIVATE_DECLARE_STATIC` | Accede ai membri statici | Target, MemberName | `GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter)` |
+| `GTESTG_PRIVATE_DECLARE_FUNCTION` | Funzione accessor personalizzata | ThisClass, Target, FuncName | `GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum)` |
+
+#### Accedere ai Membri
+
+| Macro | Scopo | Parametri | Esempio |
+|-------|---------|------------|---------|
+| `GTESTG_PRIVATE_MEMBER` | Accede al membro di istanza | Target, MemberName, &obj | `GTESTG_PRIVATE_MEMBER(MyClass, privateField, &obj)` |
+| `GTESTG_PRIVATE_STATIC` | Accede al membro statico | Target, MemberName | `GTESTG_PRIVATE_STATIC(MyClass, staticCounter)` |
+| `GTESTG_PRIVATE_CALL` | Chiama funzione personalizzata con oggetto di test esplicito | Target, FuncName, test_obj, &obj | `GTESTG_PRIVATE_CALL(MyClass, GetSum, *this, &obj)` |
+| `GTESTG_PRIVATE_CALL_ON_TEST` | Chiama funzione personalizzata (usa 'this' implicito) | ThisClass, Target, FuncName, &obj | `GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj)` |
+
+### Esempi d'Uso
+
+**Membri di Istanza:**
+```cpp
+// Dichiarare
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateField);
+
+// Accedere nel test
+int& value = GTESTG_PRIVATE_MEMBER(MyClass, privateField, &obj);
+value = 42;  // Può modificare
+```
 
 **Membri Statici:**
 ```cpp
-GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter)
+// Dichiarare
+GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter);
+
+// Accedere nel test
+int& count = GTESTG_PRIVATE_STATIC(MyClass, staticCounter);
+count++;  // Può modificare
 ```
 
-**사용자 정의 함수:**
+**Funzioni Personalizzate:**
 ```cpp
-GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, CustomAccess) {
-    return target->privateField1 + target->privateField2;
-};
-```
-
-**Funzioni Accessor Personalizzate:**
-```cpp
-GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, CustomAccess) {
-    return target->privateField1 + target->privateField2;
+// Dichiarare con logica personalizzata
+// THIS fornisce il contesto di test, TARGET è l'oggetto a cui si accede
+GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum) {
+    // Accedere al parametro di test se necessario: THIS->GetParam()
+    // Accedere all'oggetto target: TARGET->field1, TARGET->field2
+    return TARGET->field1 + TARGET->field2;
 }
+
+// Chiamare dall'interno di TEST_G(MyTest, ...)
+// Opzione 1: Usa 'this' implicito con CALL_ON_TEST
+int sum1 = GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj);
+
+// Opzione 2: Passa l'oggetto di test esplicitamente con CALL
+int sum2 = GTESTG_PRIVATE_CALL(MyClass, GetSum, *this, &obj);
 ```
+
+**Nomi dei Parametri nelle Funzioni Personalizzate:**
+- `THIS` - Puntatore all'istanza della fixture di test (fornisce contesto di test come `GetParam()`)
+- `TARGET` - Puntatore all'oggetto di cui si sta accedendo ai membri privati
+
+**Note di Implementazione:**
+- La libreria usa la specializzazione template con dichiarazioni friend per l'accesso type-safe
+- Il tracciamento dell'indice di colonna in modalità ALIGNED si resetta automaticamente tra i parametri di test (risolto nella versione recente)
+- Tutte le macro usano il prefisso `GTESTG_` per evitare conflitti di nomi
 
 Vedere `test_private_access.cpp` e `example_common_header.h` per esempi completi.
 
@@ -545,3 +595,23 @@ TEST_G(ArrayTest, ParameterizedArrayTest) {
 - **Messaggi di successo**: Mostra "Arrays are equal" quando tutti gli elementi corrispondono
 - **Compatibile con vettori e array**: Funziona con array C-style, std::vector, std::array
 
+### Note Importanti
+
+1. **Parametro dimensione richiesto**: Devi fornire esplicitamente la dimensione dell'array
+2. **Fatale vs Non-fatale**: Usa ASSERT_* per asserzioni fatali, EXPECT_* per non-fatali
+3. **Confronti a virgola mobile**: Usa NEAR, FLOAT_EQ o DOUBLE_EQ per valori a virgola mobile
+4. **Tipi personalizzati**: Il tuo tipo deve avere operator== definito per EXPECT_ARRAY_EQ
+5. **Array di dimensione zero**: Funziona correttamente con array vuoti (dimensione = 0)
+
+Vedere `test_array_compare.cpp` per esempi completi.
+
+## Miglioramenti Futuri
+
+- Calcolo dinamico del numero totale di combinazioni
+- Supporto per diversi tipi di dati nei generatori
+- Istanziazioni di test con nome
+- Supporto per pattern di valori più complessi
+
+## Licenza
+
+Questo progetto è fornito così com'è per scopi educativi e di sviluppo.

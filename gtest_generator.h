@@ -6,6 +6,7 @@
 #include <vector>
 #include <cassert>
 #include <algorithm>
+#include <type_traits>
 
 
 namespace gtest_generator {
@@ -32,6 +33,8 @@ inline thread_local SamplingMode tl_mode = SamplingMode::FULL;
 // Column sizes discovered during counting; cursor during run
 inline thread_local std::vector<int> tl_col_sizes;
 inline thread_local int tl_col_ix = 0;
+inline thread_local int tl_last_param = -1;  // Track last param to reset tl_col_ix
+inline thread_local std::string tl_last_test_key = "";  // Track last test to reset state
 
 // Persist per-test column sizes so run phase can access them
 inline std::map<std::string, std::vector<int>> g_colsizes_map;
@@ -88,19 +91,19 @@ class DynamicRangeGenerator : public testing::internal::ParamGeneratorInterface<
   }
 
 
-  // Begin iterator: binds to 'end'
+  // Begin iterator: binds to 'start'
   testing::internal::ParamIteratorInterface<int>* Begin() const override {
     if constexpr (GTEST_GENERATOR_LOG) printf("Creating begin iterator for %s\n", key.c_str());
     return new DynIterator(start, this, /*at_end=*/false);
   }
 
-  // End iterator: marks the end
+  // End iterator: binds to 'end' and marks the end
   testing::internal::ParamIteratorInterface<int>* End() const override {
     return new DynIterator(end, this, /*at_end=*/true);
   }
 
  private:
-  // Iterator yielding a reference to 'end', then marking done
+  // Iterator for parameter generation (used for both begin and end iterators)
   class DynIterator : public testing::internal::ParamIteratorInterface<int> {
    public:
     DynIterator(int& value, const DynamicRangeGenerator* generator, bool at_end)
@@ -125,12 +128,12 @@ class DynamicRangeGenerator : public testing::internal::ParamGeneratorInterface<
 
     const testing::internal::ParamGeneratorInterface<int>* BaseGenerator() const override {
         if constexpr (GTEST_GENERATOR_LOG) printf("Base generator for %s\n", _generator->key.c_str());
-        return _generator; // No base generator for begin iterator
+        return _generator;
     }
 
     const int* Current() const override {
         if constexpr (GTEST_GENERATOR_LOG) printf("Current value for %s: %d\n", _generator->key.c_str(), _value);
-        return &_value; // Return pointer to current value
+        return &_value;
     }
 
     bool Equals(const testing::internal::ParamIteratorInterface<int>& other) const override {
@@ -202,30 +205,55 @@ inline const T& GetGeneratorValue(std::initializer_list<T> values, ::gtest_gener
     // RUN PHASE - check what mode this test uses
     const auto* info = ::testing::UnitTest::GetInstance()->current_test_info();
     SamplingMode mode = SamplingMode::FULL;
+    std::string key_for_mode;
     if (info) {
-        std::string key = std::string(info->test_suite_name()) + "." + info->name();
-        auto mode_it = g_test_modes.find(key);
+        // Parse GTest name format: "Generator/SimpleTest__TwoValues.__/0"
+        // Extract to simple format: "SimpleTest.TwoValues"
+        std::string gtest_suite = info->test_suite_name();
+        std::string simple_key;
+        size_t slash_pos = gtest_suite.find('/');
+        if (slash_pos != std::string::npos) {
+            std::string suite_part = gtest_suite.substr(slash_pos + 1);
+            size_t dunder_pos = suite_part.find("__");
+            if (dunder_pos != std::string::npos) {
+                std::string test_class = suite_part.substr(0, dunder_pos);
+                std::string test_name = suite_part.substr(dunder_pos + 2);
+                simple_key = test_class + "." + test_name;
+            }
+        }
+        if (simple_key.empty()) simple_key = std::string(info->test_suite_name()) + "." + info->name();
+
+        key_for_mode = simple_key;
+        auto mode_it = g_test_modes.find(key_for_mode);
         if (mode_it != g_test_modes.end()) {
             mode = mode_it->second;
         }
     }
-    
+
     if (mode == SamplingMode::FULL) {
         int paramIndex = test_instance ? test_instance->GetParam() : 0;
         return *(values.begin() + ((paramIndex / current_devider) % values.size()));
     } else {
         // ALIGNED: keep column order; round-robin each column's values
         std::vector<int>* col_sizes = nullptr;
-        if (info) {
-            std::string key = std::string(info->test_suite_name()) + "." + info->name();
-            auto it = g_colsizes_map.find(key);
+        std::string current_test_key = key_for_mode;  // Use the same parsed key
+        if (!current_test_key.empty()) {
+            auto it = g_colsizes_map.find(current_test_key);
             if (it != g_colsizes_map.end()) {
                 col_sizes = &(it->second);
             }
         }
-        
+
         // Check if we should skip this test iteration
         int r = test_instance ? test_instance->GetParam() : 0;
+
+        // Reset column index when we start a new test OR new parameter
+        if (current_test_key != tl_last_test_key || r != tl_last_param) {
+            tl_col_ix = 0;
+            tl_last_param = r;
+            tl_last_test_key = current_test_key;
+        }
+
         if (col_sizes && !col_sizes->empty()) {
             int max_size = 0;
             for (int s : *col_sizes) max_size = std::max(max_size, s);
@@ -234,15 +262,15 @@ inline const T& GetGeneratorValue(std::initializer_list<T> values, ::gtest_gener
                 // Return first value as dummy
                 return *values.begin();
             }
-            
+
             int col = tl_col_ix++;
             if (tl_col_ix >= (int)col_sizes->size()) tl_col_ix = 0;
-            
+
             int s_i = (*col_sizes)[col];
             int idx = (s_i == 0) ? 0 : (r % s_i);
             return *(values.begin() + idx);
         }
-        
+
         // Fallback
         int paramIndex = test_instance ? test_instance->GetParam() : 0;
         return *(values.begin() + (paramIndex % values.size()));
@@ -277,7 +305,7 @@ auto gtestg_private_accessMember(TestCase* test_case, Target* target = nullptr) 
 // In production builds: Empty macro (no effect)
 #define GTESTG_FRIEND_ACCESS_PRIVATE() \
     template <typename _ID, typename _TC, typename _TG> \
-    friend auto gtestg_private_accessMember(_TC*, _TG*) -> decltype(auto)
+    friend auto ::gtestg_private_accessMember(_TC*, _TG*) -> decltype(auto)
 
 #endif  // GTEST_GENERATOR_ACCESS_PRIVATE_MEMBER_DEFINED
 
@@ -300,8 +328,8 @@ struct gtestg_private_dummy_test;
 #define GTESTG_PRIVATE_DECLARE_MEMBER(Target, Member) \
     struct GTESTG_PRIVATE_CONCAT(Target, Member); \
     template <> \
-    inline auto gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, Member), gtestg_private_dummy_test, Target>(gtestg_private_dummy_test* test_case, Target* target) -> decltype(auto) { \
-        return (target->Member); \
+    inline auto gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, Member), gtestg_private_dummy_test, Target>(gtestg_private_dummy_test* THIS, Target* TARGET) -> decltype(auto) { \
+        return (TARGET->Member); \
     }
 
 // Macro to declare access to static members
@@ -310,18 +338,18 @@ struct gtestg_private_dummy_test;
 #define GTESTG_PRIVATE_DECLARE_STATIC(Target, Member) \
     struct GTESTG_PRIVATE_CONCAT(Target, Member); \
     template <> \
-    inline auto gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, Member), gtestg_private_dummy_test, Target>(gtestg_private_dummy_test* test_case, Target* target) -> decltype(auto) { \
+    inline auto gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, Member), gtestg_private_dummy_test, Target>(gtestg_private_dummy_test* THIS, Target* TARGET) -> decltype(auto) { \
         return Target::Member; \
     }
 
 // Macro to declare a custom function for accessing private members
-// Usage: GTESTG_PRIVATE_DECLARE_FUNCTION(TestCase, Target, FunctionName) { return custom_expression; }
-// Example: GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum) { return target->field1 + target->field2; }
-// TestCase allows access to test context (e.g., test_case->GetParam())
-#define GTESTG_PRIVATE_DECLARE_FUNCTION(TestCase, Target, FuncName) \
+// Usage: GTESTG_PRIVATE_DECLARE_FUNCTION(ThisClass, Target, FunctionName) { return custom_expression; }
+// Example: GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum) { return TARGET->field1 + TARGET->field2; }
+// ThisClass allows access to test context (e.g., THIS->GetParam())
+#define GTESTG_PRIVATE_DECLARE_FUNCTION(ThisClass, Target, FuncName) \
     struct GTESTG_PRIVATE_CONCAT(Target, FuncName); \
     template <> \
-    inline auto gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, FuncName), TestCase, Target>(TestCase* test_case, Target* target) -> decltype(auto)
+    inline auto gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, FuncName), ThisClass, Target>(ThisClass* THIS, Target* TARGET) -> decltype(auto)
 
 // Macro for accessing instance members
 // Usage: GTESTG_PRIVATE_MEMBER(Target, MemberName, &obj)
@@ -333,13 +361,18 @@ struct gtestg_private_dummy_test;
 #define GTESTG_PRIVATE_STATIC(Target, Member) \
     gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, Member), gtestg_private_dummy_test, Target>(nullptr, nullptr)
 
-// Macro for calling custom functions from within a test
-// Usage: GTESTG_PRIVATE_CALL(TestCase, Target, FunctionName, &obj)
-// TestCase should match the type used in GTESTG_PRIVATE_DECLARE_FUNCTION
-#define GTESTG_PRIVATE_CALL(TestCase, Target, FuncName, ...) \
-    gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, FuncName), TestCase, Target>(static_cast<TestCase*>(this), ##__VA_ARGS__)
+// Macro for calling custom functions with an explicit test case object
+// Usage: GTESTG_PRIVATE_CALL(Target, FunctionName, test_obj, &obj)
+// The TestCase template parameter is inferred from test_obj's type
+#define GTESTG_PRIVATE_CALL(Target, FuncName, test_obj, ...) \
+    gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, FuncName), typename std::decay<decltype(test_obj)>::type, Target>(&test_obj, ##__VA_ARGS__)
 
-// ============================================================================
+// Macro for calling custom functions from within a test (uses 'this')
+// Usage: GTESTG_PRIVATE_CALL_ON_TEST(ThisClass, Target, FunctionName, &obj)
+// ThisClass should match the type used in GTESTG_PRIVATE_DECLARE_FUNCTION
+#define GTESTG_PRIVATE_CALL_ON_TEST(ThisClass, Target, FuncName, ...) \
+    gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, FuncName), ThisClass, Target>(static_cast<ThisClass*>(this), ##__VA_ARGS__)
+
 
 // Macros
 // USE_GENERATOR with optional mode parameter (defaults to FULL for backward compatibility)
@@ -396,6 +429,7 @@ struct gtestg_private_dummy_test;
     if (!::gtest_generator::on_counting) { \
       ::gtest_generator::tl_col_sizes.clear(); \
       ::gtest_generator::tl_col_ix = 0; \
+      ::gtest_generator::tl_last_param = -1; \
     } \
   } while(0); \
   if (gtest_generator::IsCountingMode(*this)) return;

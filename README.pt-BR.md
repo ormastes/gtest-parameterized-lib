@@ -336,6 +336,7 @@ Teste: a=2, b=20
 - Todas as chamadas `GENERATOR()` devem vir antes de `USE_GENERATOR()`
 - Tipos complexos (objetos, ponteiros) funcionam com GENERATOR mas podem requerer instanciação de template apropriada
 - O gerenciamento de memória é responsabilidade do usuário ao gerar ponteiros com `new`
+- Armazenamento thread-local é usado, portanto o comportamento em ambientes de teste multi-threaded pode precisar de consideração
 
 ## Acesso a Membros Privados para Testes
 
@@ -382,5 +383,136 @@ TEST_G(MyTest, AccessPrivate) {
 - **Seguro de tipo**: Usa especialização de template e declarações friend
 - **Sem overhead**: Mecanismo completamente em tempo de compilação
 - **Seguro para produção**: `GTESTG_FRIEND_ACCESS_PRIVATE()` pode ser definido como macro vazia em builds de produção
-- **Compartilhável**: O bloco de declaração (linhas 260-274 em `gtest_generator.h`) pode ser copiado para cabeçalhos comuns
+- **Compartilhável**: O bloco de declaração pode ser copiado para cabeçalhos comuns
+- **Com namespace**: Todas as macros e funções usam o prefixo `GTESTG_` para evitar conflitos de nomes
+- **API simples**: Parâmetros mínimos, sintaxe limpa
 
+### Referência da API
+
+#### Declarando Acesso
+
+| Macro | Propósito | Parâmetros | Exemplo |
+|-------|---------|------------|---------|
+| `GTESTG_PRIVATE_DECLARE_MEMBER` | Acessar membros de instância | Target, MemberName | `GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateField)` |
+| `GTESTG_PRIVATE_DECLARE_STATIC` | Acessar membros estáticos | Target, MemberName | `GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter)` |
+| `GTESTG_PRIVATE_DECLARE_FUNCTION` | Função de acesso personalizada | ThisClass, Target, FuncName | `GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum)` |
+
+#### Acessando Membros
+
+| Macro | Propósito | Parâmetros | Exemplo |
+|-------|---------|------------|---------|
+| `GTESTG_PRIVATE_MEMBER` | Acessar membro de instância | Target, MemberName, &obj | `GTESTG_PRIVATE_MEMBER(MyClass, privateField, &obj)` |
+| `GTESTG_PRIVATE_STATIC` | Acessar membro estático | Target, MemberName | `GTESTG_PRIVATE_STATIC(MyClass, staticCounter)` |
+| `GTESTG_PRIVATE_CALL` | Chamar função personalizada com objeto de teste explícito | Target, FuncName, test_obj, &obj | `GTESTG_PRIVATE_CALL(MyClass, GetSum, *this, &obj)` |
+| `GTESTG_PRIVATE_CALL_ON_TEST` | Chamar função personalizada (usa 'this' implícito) | ThisClass, Target, FuncName, &obj | `GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj)` |
+
+### Exemplos de Uso
+
+**Membros de Instância:**
+```cpp
+// Declarar
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateField);
+
+// Acessar no teste
+int& value = GTESTG_PRIVATE_MEMBER(MyClass, privateField, &obj);
+value = 42;  // Pode modificar
+```
+
+**Membros Estáticos:**
+```cpp
+// Declarar
+GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter);
+
+// Acessar no teste
+int& count = GTESTG_PRIVATE_STATIC(MyClass, staticCounter);
+count++;  // Pode modificar
+```
+
+**Funções Personalizadas:**
+```cpp
+// Declarar com lógica personalizada
+// THIS fornece contexto de teste, TARGET é o objeto sendo acessado
+GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum) {
+    // Acessar parâmetro de teste se necessário: THIS->GetParam()
+    // Acessar objeto alvo: TARGET->field1, TARGET->field2
+    return TARGET->field1 + TARGET->field2;
+}
+
+// Chamar de dentro de TEST_G(MyTest, ...)
+// Opção 1: Usar 'this' implícito com CALL_ON_TEST
+int sum1 = GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj);
+
+// Opção 2: Passar objeto de teste explicitamente com CALL
+int sum2 = GTESTG_PRIVATE_CALL(MyClass, GetSum, *this, &obj);
+```
+
+**Nomes de Parâmetros em Funções Personalizadas:**
+- `THIS` - Ponteiro para a instância da fixture de teste (fornece contexto de teste como `GetParam()`)
+- `TARGET` - Ponteiro para o objeto cujos membros privados você está acessando
+
+**Notas de Implementação:**
+- A biblioteca usa especialização de template com declarações friend para acesso seguro de tipo
+- O rastreamento do índice de coluna no modo ALIGNED reinicia automaticamente entre parâmetros de teste (corrigido na versão recente)
+- Todas as macros usam o prefixo `GTESTG_` para evitar conflitos de nomes
+
+Consulte `test_private_access.cpp` e `example_common_header.h` para exemplos completos.
+
+## Macros de Comparação de Arrays
+
+A biblioteca fornece macros convenientes para comparar arrays elemento por elemento com mensagens de erro detalhadas. Essas macros são construídas sobre as macros de asserção do Google Test.
+
+### Exemplo Rápido
+
+```cpp
+TEST_G(ArrayTest, CompareArrays) {
+    USE_GENERATOR();
+
+    int expected[] = {1, 2, 3, 4, 5};
+    int actual[] = {1, 2, 3, 4, 5};
+
+    EXPECT_ARRAY_EQ(expected, actual, 5);  // Asserção não-fatal
+}
+```
+
+### Macros Disponíveis
+
+#### Tipos Inteiros e Genéricos
+
+- **`EXPECT_ARRAY_EQ(expected, actual, size)`** - Não-fatal: Compara dois arrays elemento por elemento
+- **`ASSERT_ARRAY_EQ(expected, actual, size)`** - Fatal: Compara dois arrays elemento por elemento
+
+#### Tipos de Ponto Flutuante
+
+- **`EXPECT_ARRAY_NEAR(expected, actual, size, abs_error)`** - Não-fatal: Compara arrays de ponto flutuante com tolerância
+- **`ASSERT_ARRAY_NEAR(expected, actual, size, abs_error)`** - Fatal: Compara arrays de ponto flutuante com tolerância
+- **`EXPECT_ARRAY_DOUBLE_EQ(expected, actual, size)`** - Não-fatal: Compara arrays de double com tolerância padrão
+- **`EXPECT_ARRAY_FLOAT_EQ(expected, actual, size)`** - Não-fatal: Compara arrays de float com tolerância padrão
+
+### Recursos Principais
+
+- **Comparação elemento por elemento**: Cada elemento é comparado individualmente
+- **Mensagens de erro detalhadas**: Mostra qual índice difere e os valores
+- **Funciona com qualquer tipo comparável**: int, float, double, string, tipos personalizados com operator==
+- **Mensagens de sucesso**: Mostra "Arrays are equal" quando todos os elementos correspondem
+- **Compatível com vetores e arrays**: Funciona com arrays estilo C, std::vector, std::array
+
+### Notas Importantes
+
+1. **Parâmetro de tamanho é obrigatório**: Você deve fornecer explicitamente o tamanho do array
+2. **Fatal vs Não-fatal**: Use ASSERT_* para asserções fatais, EXPECT_* para não-fatais
+3. **Comparações de ponto flutuante**: Use NEAR, FLOAT_EQ ou DOUBLE_EQ para valores de ponto flutuante
+4. **Tipos personalizados**: Seu tipo deve ter operator== definido para EXPECT_ARRAY_EQ
+5. **Arrays de tamanho zero**: Funciona corretamente com arrays vazios (tamanho = 0)
+
+Consulte `test_array_compare.cpp` para exemplos completos.
+
+## Melhorias Futuras
+
+- Cálculo dinâmico do número total de combinações
+- Suporte para diferentes tipos de dados em geradores
+- Instanciações de teste nomeadas
+- Suporte para padrões de valores mais complexos
+
+## Licença
+
+Este projeto é fornecido como está para fins educacionais e de desenvolvimento.

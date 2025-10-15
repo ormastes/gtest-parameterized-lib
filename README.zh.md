@@ -382,27 +382,77 @@ TEST_G(MyTest, AccessPrivate) {
 - **类型安全**：使用模板特化和友元声明
 - **零开销**：完全的编译时机制
 - **生产安全**：在生产构建中，`GTESTG_FRIEND_ACCESS_PRIVATE()`可以定义为空宏
-- **可共享**：声明块（`gtest_generator.h`中的第260-274行）可以复制到通用头文件中
+- **可共享**：声明块可以复制到通用头文件中
+- **命名空间化**：所有宏和函数都使用`GTESTG_`前缀以防止命名冲突
+- **简单的API**：参数最少，语法简洁
 
+### API参考
+
+#### 声明访问
+
+| 宏 | 用途 | 参数 | 示例 |
+|-------|---------|------------|---------|
+| `GTESTG_PRIVATE_DECLARE_MEMBER` | 访问实例成员 | Target, MemberName | `GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateField)` |
+| `GTESTG_PRIVATE_DECLARE_STATIC` | 访问静态成员 | Target, MemberName | `GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter)` |
+| `GTESTG_PRIVATE_DECLARE_FUNCTION` | 自定义访问器函数 | ThisClass, Target, FuncName | `GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum)` |
+
+#### 访问成员
+
+| 宏 | 用途 | 参数 | 示例 |
+|-------|---------|------------|---------|
+| `GTESTG_PRIVATE_MEMBER` | 访问实例成员 | Target, MemberName, &obj | `GTESTG_PRIVATE_MEMBER(MyClass, privateField, &obj)` |
+| `GTESTG_PRIVATE_STATIC` | 访问静态成员 | Target, MemberName | `GTESTG_PRIVATE_STATIC(MyClass, staticCounter)` |
+| `GTESTG_PRIVATE_CALL` | 使用显式测试对象调用自定义函数 | Target, FuncName, test_obj, &obj | `GTESTG_PRIVATE_CALL(MyClass, GetSum, *this, &obj)` |
+| `GTESTG_PRIVATE_CALL_ON_TEST` | 调用自定义函数（使用隐式'this'） | ThisClass, Target, FuncName, &obj | `GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj)` |
+
+### 使用示例
+
+**实例成员：**
+```cpp
+// 声明
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateField);
+
+// 在测试中访问
+int& value = GTESTG_PRIVATE_MEMBER(MyClass, privateField, &obj);
+value = 42;  // 可以修改
+```
 
 **静态成员：**
 ```cpp
-GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter)
+// 声明
+GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter);
+
+// 在测试中访问
+int& count = GTESTG_PRIVATE_STATIC(MyClass, staticCounter);
+count++;  // 可以修改
 ```
 
-**사용자 정의 함수:**
+**自定义函数：**
 ```cpp
-GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, CustomAccess) {
-    return target->privateField1 + target->privateField2;
-};
-```
-
-**自定义访问器函数：**
-```cpp
-GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, CustomAccess) {
-    return target->privateField1 + target->privateField2;
+// 使用自定义逻辑声明
+// THIS 提供测试上下文，TARGET 是被访问的对象
+GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum) {
+    // 如果需要可以访问测试参数：THIS->GetParam()
+    // 访问目标对象：TARGET->field1, TARGET->field2
+    return TARGET->field1 + TARGET->field2;
 }
+
+// 在 TEST_G(MyTest, ...) 中调用
+// 选项1：使用 CALL_ON_TEST 使用隐式 'this'
+int sum1 = GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj);
+
+// 选项2：使用 CALL 显式传递测试对象
+int sum2 = GTESTG_PRIVATE_CALL(MyClass, GetSum, *this, &obj);
 ```
+
+**自定义函数中的参数名：**
+- `THIS` - 指向测试夹具实例的指针（提供像`GetParam()`这样的测试上下文）
+- `TARGET` - 指向您正在访问其私有成员的对象的指针
+
+**实现说明：**
+- 库使用带有友元声明的模板特化来实现类型安全访问
+- ALIGNED模式中的列索引跟踪在测试参数之间自动重置（在最新版本中已修复）
+- 所有宏都使用`GTESTG_`前缀以避免命名冲突
 
 有关完整示例，请参见`test_private_access.cpp`和`example_common_header.h`。
 
@@ -545,3 +595,23 @@ TEST_G(ArrayTest, ParameterizedArrayTest) {
 - **成功消息**：当所有元素匹配时显示"Arrays are equal"
 - **兼容向量和数组**：适用于C风格数组、std::vector、std::array
 
+### 重要说明
+
+1. **必须提供大小参数**：您必须明确提供数组大小
+2. **致命 vs 非致命**：致命断言使用ASSERT_*，非致命使用EXPECT_*
+3. **浮点比较**：浮点值使用NEAR、FLOAT_EQ或DOUBLE_EQ
+4. **自定义类型**：使用EXPECT_ARRAY_EQ需要类型定义operator==
+5. **零大小数组**：空数组（大小 = 0）可正常工作
+
+有关完整示例，请参见`test_array_compare.cpp`。
+
+## 未来改进
+
+- 动态计算总组合数
+- 支持生成器中的不同数据类型
+- 命名测试实例化
+- 支持更复杂的值模式
+
+## 许可证
+
+本项目以教育和开发目的提供。

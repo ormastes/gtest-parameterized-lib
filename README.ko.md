@@ -382,27 +382,77 @@ TEST_G(MyTest, AccessPrivate) {
 - **타입 안전**: 템플릿 특수화와 friend 선언 사용
 - **제로 오버헤드**: 완전히 컴파일 타임 메커니즘
 - **프로덕션 안전**: 프로덕션 빌드에서 `GTESTG_FRIEND_ACCESS_PRIVATE()`를 빈 매크로로 정의 가능
-- **공유 가능**: 선언 블록(`gtest_generator.h`의 260-274줄)을 공통 헤더에 복사 가능
+- **공유 가능**: 선언 블록을 공통 헤더에 복사 가능
+- **네임스페이스 사용**: 모든 매크로와 함수는 `GTESTG_` 접두사를 사용하여 이름 충돌 방지
+- **간단한 API**: 최소한의 매개변수, 깔끔한 구문
 
+### API 레퍼런스
+
+#### 접근 선언하기
+
+| 매크로 | 용도 | 매개변수 | 예제 |
+|-------|---------|------------|---------|
+| `GTESTG_PRIVATE_DECLARE_MEMBER` | 인스턴스 멤버 접근 | Target, MemberName | `GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateField)` |
+| `GTESTG_PRIVATE_DECLARE_STATIC` | 정적 멤버 접근 | Target, MemberName | `GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter)` |
+| `GTESTG_PRIVATE_DECLARE_FUNCTION` | 사용자 정의 접근자 함수 | ThisClass, Target, FuncName | `GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum)` |
+
+#### 멤버 접근하기
+
+| 매크로 | 용도 | 매개변수 | 예제 |
+|-------|---------|------------|---------|
+| `GTESTG_PRIVATE_MEMBER` | 인스턴스 멤버 접근 | Target, MemberName, &obj | `GTESTG_PRIVATE_MEMBER(MyClass, privateField, &obj)` |
+| `GTESTG_PRIVATE_STATIC` | 정적 멤버 접근 | Target, MemberName | `GTESTG_PRIVATE_STATIC(MyClass, staticCounter)` |
+| `GTESTG_PRIVATE_CALL` | 명시적 테스트 객체로 사용자 정의 함수 호출 | Target, FuncName, test_obj, &obj | `GTESTG_PRIVATE_CALL(MyClass, GetSum, *this, &obj)` |
+| `GTESTG_PRIVATE_CALL_ON_TEST` | 사용자 정의 함수 호출 (암시적 'this' 사용) | ThisClass, Target, FuncName, &obj | `GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj)` |
+
+### 사용 예제
+
+**인스턴스 멤버:**
+```cpp
+// 선언
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateField);
+
+// 테스트에서 접근
+int& value = GTESTG_PRIVATE_MEMBER(MyClass, privateField, &obj);
+value = 42;  // 수정 가능
+```
 
 **정적 멤버:**
 ```cpp
-GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter)
+// 선언
+GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter);
+
+// 테스트에서 접근
+int& count = GTESTG_PRIVATE_STATIC(MyClass, staticCounter);
+count++;  // 수정 가능
 ```
 
 **사용자 정의 함수:**
 ```cpp
-GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, CustomAccess) {
-    return target->privateField1 + target->privateField2;
-};
+// 사용자 정의 로직으로 선언
+// THIS는 테스트 컨텍스트를 제공하고, TARGET은 접근 중인 객체입니다
+GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum) {
+    // 필요한 경우 테스트 매개변수 접근: THIS->GetParam()
+    // 대상 객체 접근: TARGET->field1, TARGET->field2
+    return TARGET->field1 + TARGET->field2;
+}
+
+// TEST_G(MyTest, ...) 내부에서 호출
+// 옵션 1: CALL_ON_TEST로 암시적 'this' 사용
+int sum1 = GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj);
+
+// 옵션 2: CALL로 테스트 객체를 명시적으로 전달
+int sum2 = GTESTG_PRIVATE_CALL(MyClass, GetSum, *this, &obj);
 ```
 
-**사용자 정의 접근자 함수:**
-```cpp
-GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, CustomAccess) {
-    return target->privateField1 + target->privateField2;
-}
-```
+**사용자 정의 함수의 매개변수 이름:**
+- `THIS` - 테스트 픽스처 인스턴스에 대한 포인터 (`GetParam()`과 같은 테스트 컨텍스트 제공)
+- `TARGET` - private 멤버에 접근 중인 객체에 대한 포인터
+
+**구현 참고사항:**
+- 라이브러리는 타입 안전 접근을 위해 friend 선언과 함께 템플릿 특수화를 사용합니다
+- ALIGNED 모드에서 열 인덱스 추적은 테스트 매개변수 간에 자동으로 재설정됩니다 (최신 버전에서 수정됨)
+- 모든 매크로는 이름 충돌을 피하기 위해 `GTESTG_` 접두사를 사용합니다
 
 전체 예제는 `test_private_access.cpp`와 `example_common_header.h`를 참조하세요.
 
@@ -545,3 +595,23 @@ TEST_G(ArrayTest, ParameterizedArrayTest) {
 - **성공 메시지**: 모든 요소가 일치하면 "Arrays are equal" 표시
 - **벡터와 배열과 호환**: C-style 배열, std::vector, std::array와 작동
 
+### 중요 참고사항
+
+1. **크기 매개변수 필수**: 배열 크기를 명시적으로 제공해야 합니다
+2. **치명적 vs 비치명적**: 치명적 어설션에는 ASSERT_*를, 비치명적에는 EXPECT_*를 사용하세요
+3. **부동소수점 비교**: 부동소수점 값에는 NEAR, FLOAT_EQ, DOUBLE_EQ를 사용하세요
+4. **사용자 정의 타입**: EXPECT_ARRAY_EQ를 사용하려면 타입에 operator==가 정의되어 있어야 합니다
+5. **크기 0 배열**: 빈 배열(크기 = 0)과 함께 올바르게 작동합니다
+
+전체 예제는 `test_array_compare.cpp`를 참조하세요.
+
+## 향후 개선사항
+
+- 총 조합 수의 동적 계산
+- 생성기에서 다양한 데이터 타입 지원
+- 명명된 테스트 인스턴스화
+- 더 복잡한 값 패턴 지원
+
+## 라이센스
+
+이 프로젝트는 교육 및 개발 목적으로 제공됩니다.

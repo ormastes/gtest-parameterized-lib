@@ -30,22 +30,27 @@ TEST_G(AlignedModeTest, BasicAlignedSameSize) {
     auto a = GENERATOR(1, 2, 3);
     auto b = GENERATOR(10, 20, 30);
     auto c = GENERATOR(100, 200, 300);
-    
+
     USE_GENERATOR(ALIGNED);
-    
+
     g_basic_aligned_count++;
-    
+
     // Should generate 3 runs: (1,10,100), (2,20,200), (3,30,300)
-    static std::vector<std::tuple<int, int, int>> results;
-    results.push_back({a, b, c});
-    
-    // Verify results after all runs
-    if (GetParam() == 2) { // Last run (0-indexed)
+    // Verify each run individually
+    int param = GetParam();
+    if (param == 0) {
+        EXPECT_EQ(a, 1);
+        EXPECT_EQ(b, 10);
+        EXPECT_EQ(c, 100);
+    } else if (param == 1) {
+        EXPECT_EQ(a, 2);
+        EXPECT_EQ(b, 20);
+        EXPECT_EQ(c, 200);
+    } else if (param == 2) {
+        EXPECT_EQ(a, 3);
+        EXPECT_EQ(b, 30);
+        EXPECT_EQ(c, 300);
         EXPECT_EQ(g_basic_aligned_count, 3);
-        EXPECT_EQ(results.size(), 3);
-        EXPECT_EQ(results[0], std::make_tuple(1, 10, 100));
-        EXPECT_EQ(results[1], std::make_tuple(2, 20, 200));
-        EXPECT_EQ(results[2], std::make_tuple(3, 30, 300));
     }
 }
 
@@ -54,46 +59,54 @@ TEST_G(AlignedModeTest, AlignedDifferentSizes) {
     auto x = GENERATOR(1, 2);          // size 2
     auto y = GENERATOR(10, 20, 30, 40); // size 4
     auto z = GENERATOR(100, 200, 300);  // size 3
-    
+
     USE_GENERATOR(ALIGNED);
-    
+
     g_different_sizes_count++;
-    
+
     // Should generate 4 runs (max size)
     // x cycles: 1, 2, 1, 2
     // y cycles: 10, 20, 30, 40
     // z cycles: 100, 200, 300, 100
-    static std::vector<std::tuple<int, int, int>> results;
-    results.push_back({x, y, z});
-    
-    if (GetParam() == 3) { // Last run
+    int param = GetParam();
+    if (param == 0) {
+        EXPECT_EQ(x, 1);
+        EXPECT_EQ(y, 10);
+        EXPECT_EQ(z, 100);
+    } else if (param == 1) {
+        EXPECT_EQ(x, 2);
+        EXPECT_EQ(y, 20);
+        EXPECT_EQ(z, 200);
+    } else if (param == 2) {
+        EXPECT_EQ(x, 1);
+        EXPECT_EQ(y, 30);
+        EXPECT_EQ(z, 300);
+    } else if (param == 3) {
+        EXPECT_EQ(x, 2);
+        EXPECT_EQ(y, 40);
+        EXPECT_EQ(z, 100);
         EXPECT_EQ(g_different_sizes_count, 4);
-        EXPECT_EQ(results.size(), 4);
-        EXPECT_EQ(results[0], std::make_tuple(1, 10, 100));
-        EXPECT_EQ(results[1], std::make_tuple(2, 20, 200));
-        EXPECT_EQ(results[2], std::make_tuple(1, 30, 300));
-        EXPECT_EQ(results[3], std::make_tuple(2, 40, 100));
     }
 }
 
 // Test 3: ALIGNED mode with single column
 TEST_G(AlignedModeTest, SingleColumn) {
     auto val = GENERATOR(5, 10, 15, 20);
-    
+
     USE_GENERATOR(ALIGNED);
-    
+
     g_single_column_count++;
-    
-    static std::vector<int> results;
-    results.push_back(val);
-    
-    if (GetParam() == 3) { // Last run
+
+    int param = GetParam();
+    if (param == 0) {
+        EXPECT_EQ(val, 5);
+    } else if (param == 1) {
+        EXPECT_EQ(val, 10);
+    } else if (param == 2) {
+        EXPECT_EQ(val, 15);
+    } else if (param == 3) {
+        EXPECT_EQ(val, 20);
         EXPECT_EQ(g_single_column_count, 4);
-        EXPECT_EQ(results.size(), 4);
-        EXPECT_EQ(results[0], 5);
-        EXPECT_EQ(results[1], 10);
-        EXPECT_EQ(results[2], 15);
-        EXPECT_EQ(results[3], 20);
     }
 }
 
@@ -139,20 +152,22 @@ TEST_G(FullModeTest, DefaultIsFull) {
 TEST_G(AlignedModeTest, StringValues) {
     auto str = GENERATOR(std::string("A"), std::string("B"), std::string("C"));
     auto num = GENERATOR(1, 2, 3);
-    
+
     USE_GENERATOR(ALIGNED);
-    
+
     g_string_values_count++;
-    
-    static std::vector<std::pair<std::string, int>> results;
-    results.push_back({str, num});
-    
-    if (GetParam() == 2) { // Last run
+
+    int param = GetParam();
+    if (param == 0) {
+        EXPECT_EQ(str, "A");
+        EXPECT_EQ(num, 1);
+    } else if (param == 1) {
+        EXPECT_EQ(str, "B");
+        EXPECT_EQ(num, 2);
+    } else if (param == 2) {
+        EXPECT_EQ(str, "C");
+        EXPECT_EQ(num, 3);
         EXPECT_EQ(g_string_values_count, 3);
-        EXPECT_EQ(results.size(), 3);
-        EXPECT_EQ(results[0], std::make_pair(std::string("A"), 1));
-        EXPECT_EQ(results[1], std::make_pair(std::string("B"), 2));
-        EXPECT_EQ(results[2], std::make_pair(std::string("C"), 3));
     }
 }
 
@@ -162,20 +177,22 @@ TEST_G(AlignedModeTest, DeclarationOrder) {
     auto third = GENERATOR(300, 301);
     auto first = GENERATOR(100, 101);
     auto second = GENERATOR(200, 201);
-    
+
     USE_GENERATOR(ALIGNED);
-    
+
     g_declaration_order_count++;
-    
-    static std::vector<std::tuple<int, int, int>> results;
-    results.push_back({third, first, second});
-    
-    if (GetParam() == 1) { // Last run
+
+    int param = GetParam();
+    // Values should align by position, not by variable name
+    if (param == 0) {
+        EXPECT_EQ(third, 300);
+        EXPECT_EQ(first, 100);
+        EXPECT_EQ(second, 200);
+    } else if (param == 1) {
+        EXPECT_EQ(third, 301);
+        EXPECT_EQ(first, 101);
+        EXPECT_EQ(second, 201);
         EXPECT_EQ(g_declaration_order_count, 2);
-        EXPECT_EQ(results.size(), 2);
-        // Values should align by position, not by variable name
-        EXPECT_EQ(results[0], std::make_tuple(300, 100, 200));
-        EXPECT_EQ(results[1], std::make_tuple(301, 101, 201));
     }
 }
 
@@ -190,23 +207,21 @@ struct Point {
 TEST_G(AlignedModeTest, ComplexTypes) {
     auto p = GENERATOR(Point{1, 1}, Point{2, 2});
     auto scale = GENERATOR(10, 20);
-    
+
     USE_GENERATOR(ALIGNED);
-    
+
     g_complex_types_count++;
-    
-    static std::vector<std::pair<Point, int>> results;
-    results.push_back({p, scale});
-    
-    if (GetParam() == 1) { // Last run
+
+    int param = GetParam();
+    if (param == 0) {
+        EXPECT_EQ(p.x, 1);
+        EXPECT_EQ(p.y, 1);
+        EXPECT_EQ(scale, 10);
+    } else if (param == 1) {
+        EXPECT_EQ(p.x, 2);
+        EXPECT_EQ(p.y, 2);
+        EXPECT_EQ(scale, 20);
         EXPECT_EQ(g_complex_types_count, 2);
-        EXPECT_EQ(results.size(), 2);
-        EXPECT_EQ(results[0].first.x, 1);
-        EXPECT_EQ(results[0].first.y, 1);
-        EXPECT_EQ(results[0].second, 10);
-        EXPECT_EQ(results[1].first.x, 2);
-        EXPECT_EQ(results[1].first.y, 2);
-        EXPECT_EQ(results[1].second, 20);
     }
 }
 

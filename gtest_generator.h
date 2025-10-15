@@ -251,6 +251,66 @@ inline DynamicRangeGenerator* CreateGenerator(const std::string& name) {
 
 }  // namespace gtest_generator
 
+// ============================================================================
+// Private Member Access for Testing
+// ============================================================================
+
+// Template function declaration (prevent multiple definition with #ifdef)
+#ifndef GTEST_GENERATOR_ACCESS_PRIVATE_MEMBER_DEFINED
+#define GTEST_GENERATOR_ACCESS_PRIVATE_MEMBER_DEFINED
+
+template <typename ID, typename TestCase, typename Target>
+auto accessPrivateMember(TestCase* test_case, Target* target = nullptr) -> decltype(auto);
+
+#endif  // GTEST_GENERATOR_ACCESS_PRIVATE_MEMBER_DEFINED
+
+// Macro to make accessPrivateMember a friend of the target class
+// Usage: Place inside the target class definition
+#define FRIEND_ACCESS_PRIVATE() \
+    template <typename, typename, typename> \
+    friend auto accessPrivateMember(auto*, auto*) -> decltype(auto)
+
+// Helper macro to concatenate tokens for ID generation
+#define CONCAT_IMPL(a, b, c) a##_##b##_##c
+#define CONCAT(a, b, c) CONCAT_IMPL(a, b, c)
+
+// Macro to declare the template function with specific types for instance members
+// Usage: Place outside class definition in test file
+// ID is automatically generated from TestCase, Target, and Member
+#define DECLARE_ACCESS_PRIVATE(TestCase, Target, Member) \
+    struct CONCAT(TestCase, Target, Member); \
+    template <> \
+    inline auto accessPrivateMember<CONCAT(TestCase, Target, Member), TestCase, Target>(TestCase* test_case, Target* target) -> decltype(auto) { \
+        return target->*Member; \
+    }
+
+// Macro to declare the template function with specific types for static members
+// Usage: Place outside class definition in test file
+// ID is automatically generated from TestCase, Target, and Member
+#define DECLARE_ACCESS_PRIVATE_STATIC(TestCase, Target, Member) \
+    struct CONCAT(TestCase, Target, Member); \
+    template <> \
+    inline auto accessPrivateMember<CONCAT(TestCase, Target, Member), TestCase, Target>(TestCase* test_case, Target* target) -> decltype(auto) { \
+        return Target::Member; \
+    }
+
+// Macro to declare the template function without implementation - user appends their own function body
+// Usage: DECLARE_ACCESS_PRIVATE_FUNCTION(TestCase, Target, UniqueID) { return custom_expression; }
+// ID is automatically generated from TestCase, Target, and UniqueID
+#define DECLARE_ACCESS_PRIVATE_FUNCTION(TestCase, Target, UniqueID) \
+    struct CONCAT(TestCase, Target, UniqueID); \
+    template <> \
+    inline auto accessPrivateMember<CONCAT(TestCase, Target, UniqueID), TestCase, Target>(TestCase* test_case, Target* target) -> decltype(auto)
+
+// Macro for calling accessPrivateMember - automatically takes 'this' as first parameter
+// Second parameter defaults to nullptr if not provided
+// Usage: ACCESS_PRIVATE(Target, &obj) or ACCESS_PRIVATE(Target)
+// ID is automatically generated from the current test class and Target
+#define ACCESS_PRIVATE(Target, ...) \
+    accessPrivateMember<CONCAT(AccessID, std::remove_pointer<decltype(this)>::type, Target), std::remove_pointer<decltype(this)>::type, Target>(this, ##__VA_ARGS__)
+
+// ============================================================================
+
 // Macros
 // USE_GENERATOR with optional mode parameter (defaults to FULL for backward compatibility)
 #define USE_GENERATOR(...) \

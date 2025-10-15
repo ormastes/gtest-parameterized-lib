@@ -7,7 +7,7 @@
 // ============================================================================
 // Private Member Access Support for Testing
 // ============================================================================
-// Copy this block from gtest_generator.h to enable FRIEND_ACCESS_PRIVATE()
+// Copy this block from gtest_generator.h to enable GTESTG_FRIEND_ACCESS_PRIVATE()
 // in production code without requiring the full testing framework
 
 #ifndef GTEST_GENERATOR_ACCESS_PRIVATE_MEMBER_DEFINED
@@ -15,15 +15,15 @@
 
 // Template function declaration
 template <typename ID, typename TestCase, typename Target>
-auto accessPrivateMember(TestCase* test_case, Target* target = nullptr) -> decltype(auto);
+auto gtestg_private_accessMember(TestCase* test_case, Target* target = nullptr) -> decltype(auto);
 
-// Macro to make accessPrivateMember a friend of the target class
+// Macro to make gtestg_private_accessMember a friend of the target class
 // Usage: Place inside the target class definition
 // In test builds: Grants friend access to test infrastructure
 // In production builds: Can be redefined as empty (see below)
-#define FRIEND_ACCESS_PRIVATE() \
+#define GTESTG_FRIEND_ACCESS_PRIVATE() \
     template <typename _ID, typename _TC, typename _TG> \
-    friend auto accessPrivateMember(_TC*, _TG*) -> decltype(auto)
+    friend auto gtestg_private_accessMember(_TC*, _TG*) -> decltype(auto)
 
 #endif  // GTEST_GENERATOR_ACCESS_PRIVATE_MEMBER_DEFINED
 
@@ -31,11 +31,11 @@ auto accessPrivateMember(TestCase* test_case, Target* target = nullptr) -> declt
 // Production Build Configuration (Optional)
 // ============================================================================
 // Uncomment the following to disable friend access in production builds
-// This makes FRIEND_ACCESS_PRIVATE() an empty macro that compiles to nothing
+// This makes GTESTG_FRIEND_ACCESS_PRIVATE() an empty macro that compiles to nothing
 
 // #ifdef NDEBUG  // Only in release/production builds
-// #undef FRIEND_ACCESS_PRIVATE
-// #define FRIEND_ACCESS_PRIVATE()  // Empty macro - no friend access
+// #undef GTESTG_FRIEND_ACCESS_PRIVATE
+// #define GTESTG_FRIEND_ACCESS_PRIVATE()  // Empty macro - no friend access
 // #endif
 
 // ============================================================================
@@ -56,7 +56,7 @@ public:
         : sensitiveData(d), internalState(s) {}
 
     // Grant friend access for testing
-    FRIEND_ACCESS_PRIVATE();
+    GTESTG_FRIEND_ACCESS_PRIVATE();
 
     // Regular public methods...
 };
@@ -65,11 +65,15 @@ public:
 #include "gtest_generator.h"
 #include "example_common_header.h"  // Already included above
 
-using TestBase = gtest_generator::TestWithGenerator;
 
-// Declare accessors
-DECLARE_ACCESS_PRIVATE(id1, TestBase, MyProductionClass, sensitiveData);
-DECLARE_ACCESS_PRIVATE(id2, TestBase, MyProductionClass, internalState);
+// Declare accessors - simplified API
+GTESTG_PRIVATE_DECLARE_MEMBER(MyProductionClass, sensitiveData);
+GTESTG_PRIVATE_DECLARE_MEMBER(MyProductionClass, internalState);
+
+// Example custom function
+GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyProductionClass, GetBoth) {
+    return std::to_string(target->sensitiveData) + ":" + target->internalState;
+}
 
 // Write tests
 TEST_G(MyTest, AccessPrivate) {
@@ -77,8 +81,7 @@ TEST_G(MyTest, AccessPrivate) {
 
     MyProductionClass obj(42, "hidden");
 
-    int& data = ACCESS_PRIVATE(TestBase, TestBase_MyProductionClass_sensitiveData,
-                                MyProductionClass, &obj);
+    int& data = GTESTG_PRIVATE_MEMBER(MyProductionClass, sensitiveData, &obj);
     EXPECT_EQ(data, 42);
 }
 */

@@ -269,67 +269,75 @@ inline DynamicRangeGenerator* CreateGenerator(const std::string& name) {
 #define GTEST_GENERATOR_ACCESS_PRIVATE_MEMBER_DEFINED
 
 template <typename ID, typename TestCase, typename Target>
-auto accessPrivateMember(TestCase* test_case, Target* target = nullptr) -> decltype(auto);
+auto gtestg_private_accessMember(TestCase* test_case, Target* target = nullptr) -> decltype(auto);
 
-// Macro to make accessPrivateMember a friend of the target class
+// Macro to make gtestg_private_accessMember a friend of the target class
 // Usage: Place inside the target class definition
 // In test builds: Grants friend access to test infrastructure
 // In production builds: Empty macro (no effect)
-#define FRIEND_ACCESS_PRIVATE() \
+#define GTESTG_FRIEND_ACCESS_PRIVATE() \
     template <typename _ID, typename _TC, typename _TG> \
-    friend auto accessPrivateMember(_TC*, _TG*) -> decltype(auto)
+    friend auto gtestg_private_accessMember(_TC*, _TG*) -> decltype(auto)
 
 #endif  // GTEST_GENERATOR_ACCESS_PRIVATE_MEMBER_DEFINED
 
 // Empty macro for production builds - define this in your production headers
 // to disable friend access when not testing
-#ifndef FRIEND_ACCESS_PRIVATE
-#define FRIEND_ACCESS_PRIVATE()
+#ifndef GTESTG_FRIEND_ACCESS_PRIVATE
+#define GTESTG_FRIEND_ACCESS_PRIVATE()
 #endif
 
 // Helper macro to concatenate tokens for ID generation
-#define CONCAT_IMPL(a, b, c) a##_##b##_##c
-#define CONCAT(a, b, c) CONCAT_IMPL(a, b, c)
+#define GTESTG_PRIVATE_CONCAT_IMPL(a, b) a##_##b
+#define GTESTG_PRIVATE_CONCAT(a, b) GTESTG_PRIVATE_CONCAT_IMPL(a, b)
 
-// Macro to declare the template function with specific types for instance members
-// Usage: DECLARE_ACCESS_PRIVATE(ID, TestCase, Target, memberName)
-// IMPORTANT: MemberPtr should be just the field name (e.g., privateValue), not &Target::member
-// IMPORTANT: To use CONCAT-based ID generation, TestCase must not contain '::'
-// Use a 'using' alias to avoid scope qualifiers:
-//   using MyTestCase = ::gtest_generator::TestWithGenerator;
-//   DECLARE_ACCESS_PRIVATE(ID, MyTestCase, Target, privateField)
-// ID parameter is currently ignored - CONCAT(TestCase, Target, MemberPtr) is used instead
-#define DECLARE_ACCESS_PRIVATE(ID, TestCase, Target, MemberPtr) \
-    struct CONCAT(TestCase, Target, MemberPtr); \
+// Dummy test case type for simplified member access
+struct gtestg_private_dummy_test;
+
+// Macro to declare access to instance members
+// Usage: GTESTG_PRIVATE_DECLARE_MEMBER(Target, MemberName)
+// Example: GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateValue)
+#define GTESTG_PRIVATE_DECLARE_MEMBER(Target, Member) \
+    struct GTESTG_PRIVATE_CONCAT(Target, Member); \
     template <> \
-    inline auto accessPrivateMember<CONCAT(TestCase, Target, MemberPtr), TestCase, Target>(TestCase* test_case, Target* target) -> decltype(auto) { \
-        return (target->MemberPtr); \
+    inline auto gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, Member), gtestg_private_dummy_test, Target>(gtestg_private_dummy_test* test_case, Target* target) -> decltype(auto) { \
+        return (target->Member); \
     }
 
-// Macro to declare the template function with specific types for static members
-// Usage: Place outside class definition in test file
-// ID is automatically generated from TestCase, Target, and Member
-#define DECLARE_ACCESS_PRIVATE_STATIC(TestCase, Target, Member) \
-    struct CONCAT(TestCase, Target, Member); \
+// Macro to declare access to static members
+// Usage: GTESTG_PRIVATE_DECLARE_STATIC(Target, MemberName)
+// Example: GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter)
+#define GTESTG_PRIVATE_DECLARE_STATIC(Target, Member) \
+    struct GTESTG_PRIVATE_CONCAT(Target, Member); \
     template <> \
-    inline auto accessPrivateMember<CONCAT(TestCase, Target, Member), TestCase, Target>(TestCase* test_case, Target* target) -> decltype(auto) { \
+    inline auto gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, Member), gtestg_private_dummy_test, Target>(gtestg_private_dummy_test* test_case, Target* target) -> decltype(auto) { \
         return Target::Member; \
     }
 
-// Macro to declare the template function without implementation - user appends their own function body
-// Usage: DECLARE_ACCESS_PRIVATE_FUNCTION(TestCase, Target, UniqueID) { return custom_expression; }
-// ID is automatically generated from TestCase, Target, and UniqueID
-#define DECLARE_ACCESS_PRIVATE_FUNCTION(TestCase, Target, UniqueID) \
-    struct CONCAT(TestCase, Target, UniqueID); \
+// Macro to declare a custom function for accessing private members
+// Usage: GTESTG_PRIVATE_DECLARE_FUNCTION(TestCase, Target, FunctionName) { return custom_expression; }
+// Example: GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum) { return target->field1 + target->field2; }
+// TestCase allows access to test context (e.g., test_case->GetParam())
+#define GTESTG_PRIVATE_DECLARE_FUNCTION(TestCase, Target, FuncName) \
+    struct GTESTG_PRIVATE_CONCAT(Target, FuncName); \
     template <> \
-    inline auto accessPrivateMember<CONCAT(TestCase, Target, UniqueID), TestCase, Target>(TestCase* test_case, Target* target) -> decltype(auto)
+    inline auto gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, FuncName), TestCase, Target>(TestCase* test_case, Target* target) -> decltype(auto)
 
-// Macro for calling accessPrivateMember - automatically takes 'this' as first parameter
-// Second parameter defaults to nullptr if not provided
-// Usage: ACCESS_PRIVATE(TestCase, ID, Target, &obj) or ACCESS_PRIVATE(TestCase, ID, Target)
-// TestCase must match the type used in DECLARE_ACCESS_PRIVATE
-#define ACCESS_PRIVATE(TestCase, ID, Target, ...) \
-    accessPrivateMember<ID, TestCase, Target>(static_cast<TestCase*>(this), ##__VA_ARGS__)
+// Macro for accessing instance members
+// Usage: GTESTG_PRIVATE_MEMBER(Target, MemberName, &obj)
+#define GTESTG_PRIVATE_MEMBER(Target, Member, obj) \
+    gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, Member), gtestg_private_dummy_test, Target>(nullptr, obj)
+
+// Macro for accessing static members
+// Usage: GTESTG_PRIVATE_STATIC(Target, MemberName)
+#define GTESTG_PRIVATE_STATIC(Target, Member) \
+    gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, Member), gtestg_private_dummy_test, Target>(nullptr, nullptr)
+
+// Macro for calling custom functions from within a test
+// Usage: GTESTG_PRIVATE_CALL(TestCase, Target, FunctionName, &obj)
+// TestCase should match the type used in GTESTG_PRIVATE_DECLARE_FUNCTION
+#define GTESTG_PRIVATE_CALL(TestCase, Target, FuncName, ...) \
+    gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, FuncName), TestCase, Target>(static_cast<TestCase*>(this), ##__VA_ARGS__)
 
 // ============================================================================
 

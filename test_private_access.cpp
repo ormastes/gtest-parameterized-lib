@@ -10,22 +10,19 @@ private:
 public:
     MyClass(int v, const std::string& n) : privateValue(v), privateName(n) {}
 
-    // Make accessPrivateMember a friend
-    FRIEND_ACCESS_PRIVATE();
+    // Make gtestg_private_accessMember a friend
+    GTESTG_FRIEND_ACCESS_PRIVATE();
 };
 
-// Test fixture (declare before DECLARE_ACCESS_PRIVATE)
+// Test fixture
 class PrivateAccessTest : public ::gtest_generator::TestWithGenerator {
 };
 
-// Use 'using' to avoid :: in template parameters for CONCAT
-using TestBase = gtest_generator::TestWithGenerator;
-
-// Declare accessor for privateValue - pass just the field name
-DECLARE_ACCESS_PRIVATE(ignored, TestBase, MyClass, privateValue);
+// Declare accessor for privateValue - simplified API
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateValue);
 
 // Declare accessor for privateName
-DECLARE_ACCESS_PRIVATE(ignored2, TestBase, MyClass, privateName);
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateName);
 
 // Another test class
 class AnotherClass {
@@ -35,10 +32,10 @@ private:
 public:
     AnotherClass(double d) : secretData(d) {}
 
-    FRIEND_ACCESS_PRIVATE();
+    GTESTG_FRIEND_ACCESS_PRIVATE();
 };
 
-DECLARE_ACCESS_PRIVATE(ignored3, TestBase, AnotherClass, secretData);
+GTESTG_PRIVATE_DECLARE_MEMBER(AnotherClass, secretData);
 
 // Test accessing private integer member
 TEST_G(PrivateAccessTest, AccessPrivateInt) {
@@ -47,8 +44,8 @@ TEST_G(PrivateAccessTest, AccessPrivateInt) {
 
     MyClass obj(testValue, "test");
 
-    // Access private member - automatically passes 'this' as first parameter
-    int& privateRef = ACCESS_PRIVATE(TestBase, TestBase_MyClass_privateValue, MyClass, &obj);
+    // Access private member - simplified API
+    int& privateRef = GTESTG_PRIVATE_MEMBER(MyClass, privateValue, &obj);
 
     EXPECT_EQ(privateRef, testValue);
 
@@ -67,7 +64,7 @@ TEST_G(PrivateAccessTest, AccessPrivateString) {
     MyClass obj(value, "secret");
 
     // Access privateName
-    std::string& nameRef = ACCESS_PRIVATE(TestBase, TestBase_MyClass_privateName, MyClass, &obj);
+    std::string& nameRef = GTESTG_PRIVATE_MEMBER(MyClass, privateName, &obj);
 
     EXPECT_EQ(nameRef, "secret");
 
@@ -84,7 +81,7 @@ TEST_G(PrivateAccessTest, AccessDifferentClass) {
 
     AnotherClass obj(testData);
 
-    double& secretRef = ACCESS_PRIVATE(TestBase, TestBase_AnotherClass_secretData, AnotherClass, &obj);
+    double& secretRef = GTESTG_PRIVATE_MEMBER(AnotherClass, secretData, &obj);
 
     EXPECT_DOUBLE_EQ(secretRef, testData);
 
@@ -98,8 +95,8 @@ TEST_G(PrivateAccessTest, DefaultNullptr) {
 
     MyClass obj(value, "demo");
 
-    // Can omit second parameter (defaults to nullptr)
-    int& ref = ACCESS_PRIVATE(TestBase, TestBase_MyClass_privateValue, MyClass, &obj);
+    // Simplified member access
+    int& ref = GTESTG_PRIVATE_MEMBER(MyClass, privateValue, &obj);
 
     EXPECT_EQ(ref, value);
 

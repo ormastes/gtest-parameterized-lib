@@ -353,15 +353,15 @@ public:
     MyClass(int v, const std::string& n) : privateValue(v), privateName(n) {}
 
     // 授予测试的友元访问权限
-    FRIEND_ACCESS_PRIVATE();
+    GTESTG_FRIEND_ACCESS_PRIVATE();
 };
 
 // 在您的测试文件中
-using TestBase = gtest_generator::TestWithGenerator;
+
 
 // 声明访问器 - 只传递字段名称
-DECLARE_ACCESS_PRIVATE(id1, TestBase, MyClass, privateValue);
-DECLARE_ACCESS_PRIVATE(id2, TestBase, MyClass, privateName);
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateValue);
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateName);
 
 TEST_G(MyTest, AccessPrivate) {
     int value = GENERATOR(10, 20);
@@ -370,8 +370,7 @@ TEST_G(MyTest, AccessPrivate) {
     MyClass obj(value, "test");
 
     // 访问和修改私有成员
-    int& privateRef = ACCESS_PRIVATE(TestBase, TestBase_MyClass_privateValue,
-                                      MyClass, &obj);
+    int& privateRef = GTESTG_PRIVATE_MEMBER(MyClass, privateValue, &obj);
     EXPECT_EQ(privateRef, value);
     privateRef = 100;
     EXPECT_EQ(privateRef, 100);
@@ -382,25 +381,25 @@ TEST_G(MyTest, AccessPrivate) {
 
 - **类型安全**：使用模板特化和友元声明
 - **零开销**：完全的编译时机制
-- **生产安全**：在生产构建中，`FRIEND_ACCESS_PRIVATE()`可以定义为空宏
+- **生产安全**：在生产构建中，`GTESTG_FRIEND_ACCESS_PRIVATE()`可以定义为空宏
 - **可共享**：声明块（`gtest_generator.h`中的第260-274行）可以复制到通用头文件中
 
-### 重要说明
-
-1. **使用类型别名**：TestCase参数不能包含`::`，请使用`using TestBase = gtest_generator::TestWithGenerator;`
-2. **仅字段名称**：只传递字段名称（例如`privateValue`），而不是`&MyClass::privateValue`
-3. **自动生成的ID**：ID遵循模式`TestCase_TargetClass_MemberName`（例如`TestBase_MyClass_privateValue`）
-
-### 高级用法
 
 **静态成员：**
 ```cpp
-DECLARE_ACCESS_PRIVATE_STATIC(TestBase, MyClass, staticCounter);
+GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter)
+```
+
+**사용자 정의 함수:**
+```cpp
+GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, CustomAccess) {
+    return target->privateField1 + target->privateField2;
+};
 ```
 
 **自定义访问器函数：**
 ```cpp
-DECLARE_ACCESS_PRIVATE_FUNCTION(TestBase, MyClass, CustomAccess) {
+GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, CustomAccess) {
     return target->privateField1 + target->privateField2;
 }
 ```
@@ -546,16 +545,3 @@ TEST_G(ArrayTest, ParameterizedArrayTest) {
 - **成功消息**：当所有元素匹配时显示"Arrays are equal"
 - **兼容向量和数组**：适用于C风格数组、std::vector、std::array
 
-### 重要说明
-
-1. **必须提供size参数**：您必须显式提供数组大小
-2. **致命 vs 非致命**：使用ASSERT_*进行致命断言，使用EXPECT_*进行非致命断言
-3. **浮点数比较**：对浮点值使用NEAR、FLOAT_EQ或DOUBLE_EQ
-4. **自定义类型**：您的类型必须定义operator==才能使用EXPECT_ARRAY_EQ
-5. **零大小数组**：可以正确处理空数组（size = 0）
-
-有关完整示例，请参见`test_array_compare.cpp`。
-
-## 许可证
-
-此项目按原样提供，用于教育和开发目的。

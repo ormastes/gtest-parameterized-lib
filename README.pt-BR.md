@@ -353,15 +353,15 @@ public:
     MyClass(int v, const std::string& n) : privateValue(v), privateName(n) {}
 
     // Conceder acesso amigo para testes
-    FRIEND_ACCESS_PRIVATE();
+    GTESTG_FRIEND_ACCESS_PRIVATE();
 };
 
 // No seu arquivo de teste
-using TestBase = gtest_generator::TestWithGenerator;
+
 
 // Declarar acessadores - passe apenas o nome do campo
-DECLARE_ACCESS_PRIVATE(id1, TestBase, MyClass, privateValue);
-DECLARE_ACCESS_PRIVATE(id2, TestBase, MyClass, privateName);
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateValue);
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateName);
 
 TEST_G(MyTest, AccessPrivate) {
     int value = GENERATOR(10, 20);
@@ -369,9 +369,8 @@ TEST_G(MyTest, AccessPrivate) {
 
     MyClass obj(value, "test");
 
-    // Acessar e modificar membros privados
-    int& privateRef = ACCESS_PRIVATE(TestBase, TestBase_MyClass_privateValue,
-                                      MyClass, &obj);
+    // Acessar e modificar membros privados - API simplificada
+    int& privateRef = GTESTG_PRIVATE_MEMBER(MyClass, privateValue, &obj);
     EXPECT_EQ(privateRef, value);
     privateRef = 100;
     EXPECT_EQ(privateRef, 100);
@@ -382,180 +381,6 @@ TEST_G(MyTest, AccessPrivate) {
 
 - **Seguro de tipo**: Usa especialização de template e declarações friend
 - **Sem overhead**: Mecanismo completamente em tempo de compilação
-- **Seguro para produção**: `FRIEND_ACCESS_PRIVATE()` pode ser definido como macro vazia em builds de produção
+- **Seguro para produção**: `GTESTG_FRIEND_ACCESS_PRIVATE()` pode ser definido como macro vazia em builds de produção
 - **Compartilhável**: O bloco de declaração (linhas 260-274 em `gtest_generator.h`) pode ser copiado para cabeçalhos comuns
 
-### Notas Importantes
-
-1. **Use aliases de tipo**: O parâmetro TestCase não pode conter `::`, use `using TestBase = gtest_generator::TestWithGenerator;`
-2. **Apenas nomes de campo**: Passe apenas o nome do campo (por exemplo, `privateValue`), não `&MyClass::privateValue`
-3. **IDs auto-gerados**: IDs seguem o padrão `TestCase_TargetClass_MemberName` (por exemplo, `TestBase_MyClass_privateValue`)
-
-### Uso Avançado
-
-**Membros Estáticos:**
-```cpp
-DECLARE_ACCESS_PRIVATE_STATIC(TestBase, MyClass, staticCounter);
-```
-
-**Funções Acessadoras Personalizadas:**
-```cpp
-DECLARE_ACCESS_PRIVATE_FUNCTION(TestBase, MyClass, CustomAccess) {
-    return target->privateField1 + target->privateField2;
-}
-```
-
-Veja `test_private_access.cpp` e `example_common_header.h` para exemplos completos.
-
-## Macros de Comparação de Arrays
-
-A biblioteca fornece macros convenientes para comparar arrays elemento por elemento com mensagens de erro detalhadas. Estas macros são construídas sobre as macros de asserção do Google Test.
-
-### Exemplo Rápido
-
-```cpp
-TEST_G(ArrayTest, CompareArrays) {
-    USE_GENERATOR();
-
-    int expected[] = {1, 2, 3, 4, 5};
-    int actual[] = {1, 2, 3, 4, 5};
-
-    EXPECT_ARRAY_EQ(expected, actual, 5);  // Non-fatal assertion
-}
-```
-
-### Macros Disponíveis
-
-#### Tipos Inteiros e Genéricos
-
-- **`EXPECT_ARRAY_EQ(expected, actual, size)`** - Não-fatal: Compara dois arrays elemento por elemento
-  ```cpp
-  int expected[] = {1, 2, 3};
-  int actual[] = {1, 2, 3};
-  EXPECT_ARRAY_EQ(expected, actual, 3);
-  ```
-
-- **`ASSERT_ARRAY_EQ(expected, actual, size)`** - Fatal: Compara dois arrays elemento por elemento
-  ```cpp
-  std::vector<int> expected = {10, 20, 30};
-  std::vector<int> actual = {10, 20, 30};
-  ASSERT_ARRAY_EQ(expected.data(), actual.data(), 3);  // Test stops if fails
-  ```
-
-#### Tipos de Ponto Flutuante
-
-- **`EXPECT_ARRAY_NEAR(expected, actual, size, abs_error)`** - Não-fatal: Compara arrays de ponto flutuante com tolerância
-  ```cpp
-  double expected[] = {1.0, 2.0, 3.0};
-  double actual[] = {1.001, 1.999, 3.002};
-  EXPECT_ARRAY_NEAR(expected, actual, 3, 0.01);  // Tolerance: 0.01
-  ```
-
-- **`ASSERT_ARRAY_NEAR(expected, actual, size, abs_error)`** - Fatal: Compara arrays de ponto flutuante com tolerância
-  ```cpp
-  float expected[] = {1.5f, 2.5f, 3.5f};
-  float actual[] = {1.501f, 2.499f, 3.502f};
-  ASSERT_ARRAY_NEAR(expected, actual, 3, 0.01f);
-  ```
-
-- **`EXPECT_ARRAY_DOUBLE_EQ(expected, actual, size)`** - Não-fatal: Compara arrays de double com tolerância padrão
-  ```cpp
-  double expected[] = {1.5, 2.5, 3.5};
-  double actual[] = {1.5, 2.5, 3.5};
-  EXPECT_ARRAY_DOUBLE_EQ(expected, actual, 3);
-  ```
-
-- **`EXPECT_ARRAY_FLOAT_EQ(expected, actual, size)`** - Não-fatal: Compara arrays de float com tolerância padrão
-  ```cpp
-  float expected[] = {1.25f, 2.25f, 3.25f};
-  float actual[] = {1.25f, 2.25f, 3.25f};
-  EXPECT_ARRAY_FLOAT_EQ(expected, actual, 3);
-  ```
-
-### Mensagens de Erro
-
-Quando os arrays diferem, as macros fornecem mensagens de erro detalhadas:
-
-```cpp
-int expected[] = {1, 2, 3, 4, 5};
-int actual[] = {1, 2, 99, 4, 5};
-
-EXPECT_ARRAY_EQ(expected, actual, 5);
-// Output:
-// Expected equality of these values:
-//   (expected)[i]
-//     Which is: 3
-//   (actual)[i]
-//     Which is: 99
-// Arrays differ at index 2
-```
-
-### Trabalhando com Diferentes Tipos de Contêineres
-
-```cpp
-TEST_G(ArrayTest, DifferentContainers) {
-    int size = GENERATOR(3, 5, 7);
-    USE_GENERATOR();
-
-    // C-style arrays
-    int arr1[10] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-    int arr2[10] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-    EXPECT_ARRAY_EQ(arr1, arr2, size);
-
-    // std::vector
-    std::vector<int> vec1(size);
-    std::vector<int> vec2(size);
-    for (int i = 0; i < size; ++i) {
-        vec1[i] = i * 10;
-        vec2[i] = i * 10;
-    }
-    EXPECT_ARRAY_EQ(vec1.data(), vec2.data(), size);
-
-    // std::array
-    std::array<int, 5> arr3 = {1, 2, 3, 4, 5};
-    std::array<int, 5> arr4 = {1, 2, 3, 4, 5};
-    EXPECT_ARRAY_EQ(arr3.data(), arr4.data(), std::min(size, 5));
-}
-```
-
-### Combinando com GENERATOR
-
-```cpp
-TEST_G(ArrayTest, ParameterizedArrayTest) {
-    int size = GENERATOR(3, 5, 10);
-    int multiplier = GENERATOR(1, 10, 100);
-    USE_GENERATOR();
-
-    std::vector<int> expected(size);
-    std::vector<int> actual(size);
-
-    for (int i = 0; i < size; ++i) {
-        expected[i] = i * multiplier;
-        actual[i] = i * multiplier;
-    }
-
-    EXPECT_ARRAY_EQ(expected.data(), actual.data(), size);
-}
-```
-
-### Recursos Principais
-
-- **Comparação elemento por elemento**: Cada elemento é comparado individualmente
-- **Mensagens de erro detalhadas**: Mostra qual índice difere e os valores
-- **Funciona com qualquer tipo comparável**: int, float, double, string, tipos customizados com operator==
-- **Mensagens de sucesso**: Mostra "Arrays are equal" quando todos os elementos correspondem
-- **Compatível com vetores e arrays**: Funciona com arrays estilo C, std::vector, std::array
-
-### Notas Importantes
-
-1. **Parâmetro de tamanho é obrigatório**: Você deve fornecer explicitamente o tamanho do array
-2. **Fatal vs Não-fatal**: Use ASSERT_* para asserções fatais, EXPECT_* para não-fatais
-3. **Comparações de ponto flutuante**: Use NEAR, FLOAT_EQ, ou DOUBLE_EQ para valores de ponto flutuante
-4. **Tipos customizados**: Seus tipos devem ter operator== definido para EXPECT_ARRAY_EQ
-5. **Arrays de tamanho zero**: Funciona corretamente com arrays vazios (size = 0)
-
-Veja `test_array_compare.cpp` para exemplos completos.
-
-## Licença
-
-Este projeto é fornecido como está para fins educacionais e de desenvolvimento.

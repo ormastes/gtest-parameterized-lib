@@ -540,15 +540,13 @@ public:
     MyClass(int v, const std::string& n) : privateValue(v), privateName(n) {}
 
     // Grant friend access for testing
-    FRIEND_ACCESS_PRIVATE();
+    GTESTG_FRIEND_ACCESS_PRIVATE();
 };
 
 // In your test file
-using TestBase = gtest_generator::TestWithGenerator;
-
-// Declare accessors - pass just the field name
-DECLARE_ACCESS_PRIVATE(id1, TestBase, MyClass, privateValue);
-DECLARE_ACCESS_PRIVATE(id2, TestBase, MyClass, privateName);
+// Declare accessors - simple and clean
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateValue);
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateName);
 
 TEST_G(MyTest, AccessPrivate) {
     int value = GENERATOR(10, 20);
@@ -556,9 +554,8 @@ TEST_G(MyTest, AccessPrivate) {
 
     MyClass obj(value, "test");
 
-    // Access and modify private members
-    int& privateRef = ACCESS_PRIVATE(TestBase, TestBase_MyClass_privateValue,
-                                      MyClass, &obj);
+    // Access and modify private members - simplified API
+    int& privateRef = GTESTG_PRIVATE_MEMBER(MyClass, privateValue, &obj);
     EXPECT_EQ(privateRef, value);
     privateRef = 100;
     EXPECT_EQ(privateRef, 100);
@@ -569,27 +566,62 @@ TEST_G(MyTest, AccessPrivate) {
 
 - **Type-safe**: Uses template specialization and friend declarations
 - **Zero overhead**: Fully compile-time mechanism
-- **Production-safe**: `FRIEND_ACCESS_PRIVATE()` can be defined as empty macro in production builds
-- **Shareable**: The declaration block (lines 260-274 in `gtest_generator.h`) can be copied to common headers
+- **Production-safe**: `GTESTG_FRIEND_ACCESS_PRIVATE()` can be defined as empty macro in production builds
+- **Shareable**: The declaration block can be copied to common headers
+- **Namespaced**: All macros and functions use `GTESTG_` prefix to prevent naming conflicts
+- **Simple API**: Minimal parameters, clean syntax
 
-### Important Notes
+### API Reference
 
-1. **Use type aliases**: TestCase parameter cannot contain `::`, use `using TestBase = gtest_generator::TestWithGenerator;`
-2. **Field names only**: Pass just the field name (e.g., `privateValue`), not `&MyClass::privateValue`
-3. **Auto-generated IDs**: IDs follow the pattern `TestCase_TargetClass_MemberName` (e.g., `TestBase_MyClass_privateValue`)
+#### Declaring Access
 
-### Advanced Usage
+| Macro | Purpose | Parameters | Example |
+|-------|---------|------------|---------|
+| `GTESTG_PRIVATE_DECLARE_MEMBER` | Access instance members | Target, MemberName | `GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateField)` |
+| `GTESTG_PRIVATE_DECLARE_STATIC` | Access static members | Target, MemberName | `GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter)` |
+| `GTESTG_PRIVATE_DECLARE_FUNCTION` | Custom accessor function | TestCase, Target, FuncName | `GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum)` |
+
+#### Accessing Members
+
+| Macro | Purpose | Parameters | Example |
+|-------|---------|------------|---------|
+| `GTESTG_PRIVATE_MEMBER` | Access instance member | Target, MemberName, &obj | `GTESTG_PRIVATE_MEMBER(MyClass, privateField, &obj)` |
+| `GTESTG_PRIVATE_STATIC` | Access static member | Target, MemberName | `GTESTG_PRIVATE_STATIC(MyClass, staticCounter)` |
+| `GTESTG_PRIVATE_CALL` | Call custom function | TestCase, Target, FuncName, &obj | `GTESTG_PRIVATE_CALL(MyTest, MyClass, GetSum, &obj)` |
+
+### Usage Examples
+
+**Instance Members:**
+```cpp
+// Declare
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateField);
+
+// Access in test
+int& value = GTESTG_PRIVATE_MEMBER(MyClass, privateField, &obj);
+value = 42;  // Can modify
+```
 
 **Static Members:**
 ```cpp
-DECLARE_ACCESS_PRIVATE_STATIC(TestBase, MyClass, staticCounter);
+// Declare
+GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter);
+
+// Access in test
+int& count = GTESTG_PRIVATE_STATIC(MyClass, staticCounter);
+count++;  // Can modify
 ```
 
-**Custom Accessor Functions:**
+**Custom Functions:**
 ```cpp
-DECLARE_ACCESS_PRIVATE_FUNCTION(TestBase, MyClass, CustomAccess) {
-    return target->privateField1 + target->privateField2;
+// Declare with custom logic (test_case provides test context)
+GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum) {
+    // Access test parameter if needed: test_case->GetParam()
+    // Access target object: target->field1, target->field2
+    return target->field1 + target->field2;
 }
+
+// Call from within TEST_G(MyTest, ...)
+int sum = GTESTG_PRIVATE_CALL(MyTest, MyClass, GetSum, &obj);
 ```
 
 See `test_private_access.cpp` and `example_common_header.h` for complete examples.

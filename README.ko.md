@@ -353,15 +353,15 @@ public:
     MyClass(int v, const std::string& n) : privateValue(v), privateName(n) {}
 
     // 테스트를 위한 friend 접근 허용
-    FRIEND_ACCESS_PRIVATE();
+    GTESTG_FRIEND_ACCESS_PRIVATE();
 };
 
 // 테스트 파일에서
-using TestBase = gtest_generator::TestWithGenerator;
+
 
 // 접근자 선언 - 필드 이름만 전달
-DECLARE_ACCESS_PRIVATE(id1, TestBase, MyClass, privateValue);
-DECLARE_ACCESS_PRIVATE(id2, TestBase, MyClass, privateName);
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateValue);
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateName);
 
 TEST_G(MyTest, AccessPrivate) {
     int value = GENERATOR(10, 20);
@@ -370,8 +370,7 @@ TEST_G(MyTest, AccessPrivate) {
     MyClass obj(value, "test");
 
     // private 멤버 접근 및 수정
-    int& privateRef = ACCESS_PRIVATE(TestBase, TestBase_MyClass_privateValue,
-                                      MyClass, &obj);
+    int& privateRef = GTESTG_PRIVATE_MEMBER(MyClass, privateValue, &obj);
     EXPECT_EQ(privateRef, value);
     privateRef = 100;
     EXPECT_EQ(privateRef, 100);
@@ -382,25 +381,25 @@ TEST_G(MyTest, AccessPrivate) {
 
 - **타입 안전**: 템플릿 특수화와 friend 선언 사용
 - **제로 오버헤드**: 완전히 컴파일 타임 메커니즘
-- **프로덕션 안전**: 프로덕션 빌드에서 `FRIEND_ACCESS_PRIVATE()`를 빈 매크로로 정의 가능
+- **프로덕션 안전**: 프로덕션 빌드에서 `GTESTG_FRIEND_ACCESS_PRIVATE()`를 빈 매크로로 정의 가능
 - **공유 가능**: 선언 블록(`gtest_generator.h`의 260-274줄)을 공통 헤더에 복사 가능
 
-### 중요 사항
-
-1. **타입 별칭 사용**: TestCase 매개변수는 `::`를 포함할 수 없으므로 `using TestBase = gtest_generator::TestWithGenerator;` 사용
-2. **필드 이름만**: `&MyClass::privateValue`가 아닌 필드 이름(예: `privateValue`)만 전달
-3. **자동 생성 ID**: ID는 `TestCase_TargetClass_MemberName` 패턴을 따름(예: `TestBase_MyClass_privateValue`)
-
-### 고급 사용법
 
 **정적 멤버:**
 ```cpp
-DECLARE_ACCESS_PRIVATE_STATIC(TestBase, MyClass, staticCounter);
+GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter)
+```
+
+**사용자 정의 함수:**
+```cpp
+GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, CustomAccess) {
+    return target->privateField1 + target->privateField2;
+};
 ```
 
 **사용자 정의 접근자 함수:**
 ```cpp
-DECLARE_ACCESS_PRIVATE_FUNCTION(TestBase, MyClass, CustomAccess) {
+GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, CustomAccess) {
     return target->privateField1 + target->privateField2;
 }
 ```
@@ -546,23 +545,3 @@ TEST_G(ArrayTest, ParameterizedArrayTest) {
 - **성공 메시지**: 모든 요소가 일치하면 "Arrays are equal" 표시
 - **벡터와 배열과 호환**: C-style 배열, std::vector, std::array와 작동
 
-### 중요 사항
-
-1. **크기 매개변수 필수**: 배열 크기를 명시적으로 제공해야 합니다
-2. **Fatal vs Non-fatal**: fatal assertion에는 ASSERT_*를, non-fatal에는 EXPECT_*를 사용하세요
-3. **부동소수점 비교**: 부동소수점 값에는 NEAR, FLOAT_EQ 또는 DOUBLE_EQ를 사용하세요
-4. **사용자 정의 타입**: EXPECT_ARRAY_EQ를 위해 operator==가 정의되어 있어야 합니다
-5. **크기가 0인 배열**: 빈 배열(size = 0)과 올바르게 작동합니다
-
-전체 예제는 `test_array_compare.cpp`를 참조하세요.
-
-## 향후 개선 사항
-
-- 전체 조합의 동적 계산
-- 생성기에서 다양한 데이터 타입 지원
-- 명명된 테스트 인스턴스화
-- 더 복잡한 값 패턴 지원
-
-## 라이선스
-
-이 프로젝트는 교육 및 개발 목적으로 있는 그대로 제공됩니다.

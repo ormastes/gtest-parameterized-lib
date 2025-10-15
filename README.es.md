@@ -353,15 +353,15 @@ public:
     MyClass(int v, const std::string& n) : privateValue(v), privateName(n) {}
 
     // Conceder acceso friend para pruebas
-    FRIEND_ACCESS_PRIVATE();
+    GTESTG_FRIEND_ACCESS_PRIVATE();
 };
 
 // En su archivo de prueba
-using TestBase = gtest_generator::TestWithGenerator;
+
 
 // Declarar accesores - pasar solo el nombre del campo
-DECLARE_ACCESS_PRIVATE(id1, TestBase, MyClass, privateValue);
-DECLARE_ACCESS_PRIVATE(id2, TestBase, MyClass, privateName);
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateValue);
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateName);
 
 TEST_G(MyTest, AccessPrivate) {
     int value = GENERATOR(10, 20);
@@ -370,8 +370,7 @@ TEST_G(MyTest, AccessPrivate) {
     MyClass obj(value, "test");
 
     // Acceder y modificar miembros privados
-    int& privateRef = ACCESS_PRIVATE(TestBase, TestBase_MyClass_privateValue,
-                                      MyClass, &obj);
+    int& privateRef = GTESTG_PRIVATE_MEMBER(MyClass, privateValue, &obj);
     EXPECT_EQ(privateRef, value);
     privateRef = 100;
     EXPECT_EQ(privateRef, 100);
@@ -382,25 +381,25 @@ TEST_G(MyTest, AccessPrivate) {
 
 - **Seguridad de tipos**: Usa especialización de plantillas y declaraciones friend
 - **Cero sobrecarga**: Mecanismo completamente en tiempo de compilación
-- **Seguro para producción**: `FRIEND_ACCESS_PRIVATE()` puede definirse como macro vacía en compilaciones de producción
+- **Seguro para producción**: `GTESTG_FRIEND_ACCESS_PRIVATE()` puede definirse como macro vacía en compilaciones de producción
 - **Compartible**: El bloque de declaración (líneas 260-274 en `gtest_generator.h`) puede copiarse a encabezados comunes
 
-### Notas Importantes
-
-1. **Usar alias de tipos**: El parámetro TestCase no puede contener `::`, use `using TestBase = gtest_generator::TestWithGenerator;`
-2. **Solo nombres de campos**: Pasar solo el nombre del campo (ej., `privateValue`), no `&MyClass::privateValue`
-3. **IDs auto-generados**: Los IDs siguen el patrón `TestCase_TargetClass_MemberName` (ej., `TestBase_MyClass_privateValue`)
-
-### Uso Avanzado
 
 **Miembros Estáticos:**
 ```cpp
-DECLARE_ACCESS_PRIVATE_STATIC(TestBase, MyClass, staticCounter);
+GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter)
+```
+
+**사용자 정의 함수:**
+```cpp
+GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, CustomAccess) {
+    return target->privateField1 + target->privateField2;
+};
 ```
 
 **Funciones de Acceso Personalizadas:**
 ```cpp
-DECLARE_ACCESS_PRIVATE_FUNCTION(TestBase, MyClass, CustomAccess) {
+GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, CustomAccess) {
     return target->privateField1 + target->privateField2;
 }
 ```
@@ -546,23 +545,3 @@ TEST_G(ArrayTest, ParameterizedArrayTest) {
 - **Mensajes de éxito**: Muestra "Arrays are equal" cuando todos los elementos coinciden
 - **Compatible con vectores y arrays**: Funciona con arrays estilo C, std::vector, std::array
 
-### Notas Importantes
-
-1. **El parámetro de tamaño es requerido**: Debe proporcionar explícitamente el tamaño del array
-2. **Fatal vs No fatal**: Use ASSERT_* para aserciones fatales, EXPECT_* para no fatales
-3. **Comparaciones de punto flotante**: Use NEAR, FLOAT_EQ, o DOUBLE_EQ para valores de punto flotante
-4. **Tipos personalizados**: Sus tipos deben tener operator== definido para EXPECT_ARRAY_EQ
-5. **Arrays de tamaño cero**: Funciona correctamente con arrays vacíos (size = 0)
-
-Consulte `test_array_compare.cpp` para ejemplos completos.
-
-## Futuras Mejoras
-
-- Cálculo dinámico del total de combinaciones
-- Soporte para diferentes tipos de datos en generadores
-- Instanciaciones de prueba con nombre
-- Soporte para patrones de valores más complejos
-
-## Licencia
-
-Este proyecto se proporciona tal cual para fines educativos y de desarrollo.

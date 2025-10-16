@@ -355,7 +355,7 @@ struct gtestg_private_dummy_test;
     struct GTESTG_PRIVATE_CONCAT(Target, Member); \
     template <> \
     inline auto gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, Member), gtestg_private_dummy_test, Target>(gtestg_private_dummy_test* THIS, Target* TARGET) -> decltype(auto) { \
-        return Target::Member; \
+        return (Target::Member); \
     }
 
 // Macro to declare a custom function for accessing private members
@@ -381,7 +381,7 @@ struct gtestg_private_dummy_test;
 // Usage: GTESTG_PRIVATE_CALL(Target, FunctionName, test_obj, &obj)
 // The TestCase template parameter is inferred from test_obj's type
 #define GTESTG_PRIVATE_CALL(Target, FuncName, test_obj, ...) \
-    gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, FuncName), typename std::decay<decltype(test_obj)>::type, Target>(&test_obj, ##__VA_ARGS__)
+    gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, FuncName), typename std::decay<decltype(*test_obj)>::type, Target>(test_obj, ##__VA_ARGS__)
 
 // Macro for calling custom functions from within a test (uses 'this')
 // Usage: GTESTG_PRIVATE_CALL_ON_TEST(ThisClass, Target, FunctionName, &obj)

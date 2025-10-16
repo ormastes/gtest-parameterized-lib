@@ -402,7 +402,7 @@ TEST_G(MyTest, AccessPrivate) {
 |-------|---------|------------|---------|
 | `GTESTG_PRIVATE_MEMBER` | 인스턴스 멤버 접근 | Target, MemberName, &obj | `GTESTG_PRIVATE_MEMBER(MyClass, privateField, &obj)` |
 | `GTESTG_PRIVATE_STATIC` | 정적 멤버 접근 | Target, MemberName | `GTESTG_PRIVATE_STATIC(MyClass, staticCounter)` |
-| `GTESTG_PRIVATE_CALL` | 명시적 테스트 객체로 사용자 정의 함수 호출 | Target, FuncName, test_obj, &obj | `GTESTG_PRIVATE_CALL(MyClass, GetSum, *this, &obj)` |
+| `GTESTG_PRIVATE_CALL` | 명시적 테스트 객체로 사용자 정의 함수 호출 | Target, FuncName, test_obj, &obj | `GTESTG_PRIVATE_CALL(MyClass, GetSum, this, &obj)` |
 | `GTESTG_PRIVATE_CALL_ON_TEST` | 사용자 정의 함수 호출 (암시적 'this' 사용) | ThisClass, Target, FuncName, &obj | `GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj)` |
 
 ### 사용 예제
@@ -442,7 +442,7 @@ GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum) {
 int sum1 = GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj);
 
 // 옵션 2: CALL로 테스트 객체를 명시적으로 전달
-int sum2 = GTESTG_PRIVATE_CALL(MyClass, GetSum, *this, &obj);
+int sum2 = GTESTG_PRIVATE_CALL(MyClass, GetSum, this, &obj);
 ```
 
 **사용자 정의 함수의 매개변수 이름:**

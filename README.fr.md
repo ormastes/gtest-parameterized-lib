@@ -402,7 +402,7 @@ TEST_G(MyTest, AccessPrivate) {
 |-------|---------|------------|---------|
 | `GTESTG_PRIVATE_MEMBER` | Accéder au membre d'instance | Target, MemberName, &obj | `GTESTG_PRIVATE_MEMBER(MyClass, privateField, &obj)` |
 | `GTESTG_PRIVATE_STATIC` | Accéder au membre statique | Target, MemberName | `GTESTG_PRIVATE_STATIC(MyClass, staticCounter)` |
-| `GTESTG_PRIVATE_CALL` | Appeler une fonction personnalisée avec un objet de test explicite | Target, FuncName, test_obj, &obj | `GTESTG_PRIVATE_CALL(MyClass, GetSum, *this, &obj)` |
+| `GTESTG_PRIVATE_CALL` | Appeler une fonction personnalisée avec un objet de test explicite | Target, FuncName, test_obj, &obj | `GTESTG_PRIVATE_CALL(MyClass, GetSum, this, &obj)` |
 | `GTESTG_PRIVATE_CALL_ON_TEST` | Appeler une fonction personnalisée (utilise 'this' implicite) | ThisClass, Target, FuncName, &obj | `GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj)` |
 
 ### Exemples d'Utilisation
@@ -442,7 +442,7 @@ GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum) {
 int sum1 = GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj);
 
 // Option 2 : Passer l'objet de test explicitement avec CALL
-int sum2 = GTESTG_PRIVATE_CALL(MyClass, GetSum, *this, &obj);
+int sum2 = GTESTG_PRIVATE_CALL(MyClass, GetSum, this, &obj);
 ```
 
 **Noms des Paramètres dans les Fonctions Personnalisées :**

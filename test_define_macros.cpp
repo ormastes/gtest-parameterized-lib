@@ -64,7 +64,7 @@ TEST_G(DefineTest, TestCALL_Macros) {
 
     // Test GTESTG_PRIVATE_CALL (passes test object explicitly as third parameter)
     // Need to cast to base fixture type since function was declared with DefineTest
-    int doubled2 = GTESTG_PRIVATE_CALL(TestDefineClass, GetDoubleValue, *static_cast<DefineTest*>(this), &obj);
+    int doubled2 = GTESTG_PRIVATE_CALL(TestDefineClass, GetDoubleValue, static_cast<DefineTest*>(this), &obj);
     EXPECT_EQ(doubled2, testValue * 2);
 
     printf("Test CALL macros: value=%d, doubled=%d\n", testValue, doubled1);

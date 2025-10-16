@@ -66,6 +66,7 @@ class DynamicRangeGenerator : public testing::internal::ParamGeneratorInterface<
         tl_mode = SamplingMode::FULL;
         test_instance->TestBody();
         int full_count = current_count;
+        SamplingMode detected_mode = tl_mode;  // Capture the mode set by USE_GENERATOR()
 
         // Second pass with ALIGNED mode to get column sizes
         on_counting = true;
@@ -84,8 +85,16 @@ class DynamicRangeGenerator : public testing::internal::ParamGeneratorInterface<
         g_colsizes_map[key] = tl_col_sizes;
         g_test_counts[key] = {full_count, aligned_max};
 
-        // Start with full count - will be adjusted by USE_GENERATOR at runtime
-        end = full_count;
+        // Store the detected mode so it's known at instantiation time
+        g_test_modes[key] = detected_mode;
+
+        // Set initial end value based on detected mode
+        // This ensures Google Test instantiates the correct number of test cases
+        if (detected_mode == SamplingMode::ALIGNED) {
+            end = aligned_max;  // ALIGNED mode: only create aligned_max test cases
+        } else {
+            end = full_count;   // FULL mode: create all test cases
+        }
         tl_col_ix = 0;
     }
   }
@@ -194,12 +203,19 @@ inline const T& GetGeneratorValue(std::initializer_list<T> values, ::gtest_gener
     if (on_counting) {
         // Record this column's size in declaration order
         tl_col_sizes.push_back((int)values.size());
-        
+
         if (tl_mode == SamplingMode::FULL) {
             current_devider = current_count;
             current_count *= values.size(); // Cartesian only
+            return *values.begin(); // Return first value for FULL mode counting
+        } else {
+            // ALIGNED mode counting: return second value if available
+            // This ensures the test body runs with different values during counting
+            if (values.size() > 1) {
+                return *(values.begin() + 1); // Return second value
+            }
+            return *values.begin(); // Only one value available
         }
-        return *values.begin(); // dummy in counting pass
     }
     
     // RUN PHASE - check what mode this test uses
@@ -400,31 +416,6 @@ struct gtestg_private_dummy_test;
       \
       std::string key = simple_key; \
       ::gtest_generator::g_test_modes[key] = ::gtest_generator::tl_mode; \
-      \
-      /* Adjust generator end value based on mode (only on first call) */ \
-      auto gen_it = ::gtest_generator::g_range_map.find(key); \
-      auto count_it = ::gtest_generator::g_test_counts.find(key); \
-      if (gen_it != ::gtest_generator::g_range_map.end() && \
-          count_it != ::gtest_generator::g_test_counts.end()) { \
-        auto* gen = gen_it->second; \
-        const auto& counts = count_it->second; \
-        if (::gtest_generator::tl_mode == ::gtest_generator::SamplingMode::ALIGNED) { \
-          gen->end = counts.second; /* Use aligned_max */ \
-        } else { \
-          gen->end = counts.first; /* Use full_count */ \
-        } \
-      } \
-      \
-      if (::gtest_generator::tl_mode == ::gtest_generator::SamplingMode::ALIGNED) { \
-        auto it = ::gtest_generator::g_colsizes_map.find(key); \
-        if (it != ::gtest_generator::g_colsizes_map.end() && !it->second.empty()) { \
-          int max_size = 0; \
-          for (int s : it->second) max_size = std::max(max_size, s); \
-          if (GetParam() >= max_size) { \
-            GTEST_SKIP() << "Skipping iteration " << GetParam() << " for ALIGNED mode (max size: " << max_size << ")"; \
-          } \
-        } \
-      } \
     } \
     if (!::gtest_generator::on_counting) { \
       ::gtest_generator::tl_col_sizes.clear(); \

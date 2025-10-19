@@ -8,6 +8,43 @@
 #include <algorithm>
 #include <type_traits>
 
+// ===== Friend-access test helpers (private/protected access) =================
+#ifndef GTESTG_FRIEND_INFRA_INCLUDED
+#define GTESTG_FRIEND_INFRA_INCLUDED
+
+// Macro to place inside target class to grant friend access to specific test
+// Usage: GTESTG_FRIEND_TEST(TestSuite, TestName)
+// This grants friend access to the specific test
+#define GTESTG_FRIEND_TEST(Suite, TestName) \
+    friend class Suite##_##TestName##_Test
+
+// Macro for TEST_G style tests - grants access to the parameterized test class
+// Usage: GTESTG_FRIEND_TEST_G(TestClassName, TestName)
+#define GTESTG_FRIEND_TEST_G(TestClassName, TestName) \
+    friend class GTEST_TEST_CLASS_NAME_(TestClassName##__##TestName, __)
+
+// Alternative: Grant friend access to all tests in a suite
+// Usage: GTESTG_FRIEND_TEST_SUITE(TestSuite)
+#define GTESTG_FRIEND_TEST_SUITE(Suite) \
+    friend struct Suite
+
+// Convenience macro - to be placed in target class when you want multiple tests to have access
+// This version requires you to list each test that needs access
+#define GTESTG_FRIEND_TEST_ACCESS_PRIVATE(...) \
+    /* This macro is a placeholder - use GTESTG_FRIEND_TEST or GTESTG_FRIEND_TEST_SUITE instead */
+
+// TEST_FRIEND is just regular TEST_F when using the direct friend approach
+// The target class must have GTESTG_FRIEND_TEST(Suite, TestName) for this to work
+#define TEST_FRIEND(Suite, TestName) \
+    TEST_F(Suite, TestName)
+
+// TEST_G_FRIEND for generator tests with friend access
+// The target class must have GTESTG_FRIEND_TEST_G(TestClassName, TestName) for this to work
+#define TEST_G_FRIEND(TestClassName, TestName) \
+    TEST_G(TestClassName, TestName)
+
+#endif // GTESTG_FRIEND_INFRA_INCLUDED
+// ============================================================================
 
 namespace gtest_generator {
 static constexpr bool GTEST_GENERATOR_LOG = false;
@@ -302,93 +339,6 @@ inline DynamicRangeGenerator* CreateGenerator(const std::string& name) {
 }
 
 }  // namespace gtest_generator
-
-// ============================================================================
-// Private Member Access for Testing
-// ============================================================================
-
-// Template function declaration (prevent multiple definition with #ifdef)
-// This block can be copied to a common header file for sharing across production and test code
-#ifndef GTEST_GENERATOR_ACCESS_PRIVATE_MEMBER_DEFINED
-#define GTEST_GENERATOR_ACCESS_PRIVATE_MEMBER_DEFINED
-
-template <typename ID, typename TestCase, typename Target>
-auto gtestg_private_accessMember(TestCase* test_case, Target* target = nullptr) -> decltype(auto);
-
-// Macro to make gtestg_private_accessMember a friend of the target class
-// Usage: Place inside the target class definition
-// In test builds: Grants friend access to test infrastructure
-// In production builds: Empty macro (no effect)
-#define GTESTG_FRIEND_ACCESS_PRIVATE() \
-    template <typename _ID, typename _TC, typename _TG> \
-    friend auto ::gtestg_private_accessMember(_TC*, _TG*) -> decltype(auto)
-
-#endif  // GTEST_GENERATOR_ACCESS_PRIVATE_MEMBER_DEFINED
-
-// Empty macro for production builds - define this in your production headers
-// to disable friend access when not testing
-#ifndef GTESTG_FRIEND_ACCESS_PRIVATE
-#define GTESTG_FRIEND_ACCESS_PRIVATE()
-#endif
-
-// Helper macro to concatenate tokens for ID generation
-#define GTESTG_PRIVATE_CONCAT_IMPL(a, b) a##_##b
-#define GTESTG_PRIVATE_CONCAT(a, b) GTESTG_PRIVATE_CONCAT_IMPL(a, b)
-
-// Dummy test case type for simplified member access
-struct gtestg_private_dummy_test;
-
-// Macro to declare access to instance members
-// Usage: GTESTG_PRIVATE_DECLARE_MEMBER(Target, MemberName)
-// Example: GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateValue)
-#define GTESTG_PRIVATE_DECLARE_MEMBER(Target, Member) \
-    struct GTESTG_PRIVATE_CONCAT(Target, Member); \
-    template <> \
-    inline auto gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, Member), gtestg_private_dummy_test, Target>(gtestg_private_dummy_test* THIS, Target* TARGET) -> decltype(auto) { \
-        return (TARGET->Member); \
-    }
-
-// Macro to declare access to static members
-// Usage: GTESTG_PRIVATE_DECLARE_STATIC(Target, MemberName)
-// Example: GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter)
-#define GTESTG_PRIVATE_DECLARE_STATIC(Target, Member) \
-    struct GTESTG_PRIVATE_CONCAT(Target, Member); \
-    template <> \
-    inline auto gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, Member), gtestg_private_dummy_test, Target>(gtestg_private_dummy_test* THIS, Target* TARGET) -> decltype(auto) { \
-        return (Target::Member); \
-    }
-
-// Macro to declare a custom function for accessing private members
-// Usage: GTESTG_PRIVATE_DECLARE_FUNCTION(ThisClass, Target, FunctionName) { return custom_expression; }
-// Example: GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum) { return TARGET->field1 + TARGET->field2; }
-// ThisClass allows access to test context (e.g., THIS->GetParam())
-#define GTESTG_PRIVATE_DECLARE_FUNCTION(ThisClass, Target, FuncName) \
-    struct GTESTG_PRIVATE_CONCAT(Target, FuncName); \
-    template <> \
-    inline auto gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, FuncName), ThisClass, Target>(ThisClass* THIS, Target* TARGET) -> decltype(auto)
-
-// Macro for accessing instance members
-// Usage: GTESTG_PRIVATE_MEMBER(Target, MemberName, &obj)
-#define GTESTG_PRIVATE_MEMBER(Target, Member, obj) \
-    gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, Member), gtestg_private_dummy_test, Target>(nullptr, obj)
-
-// Macro for accessing static members
-// Usage: GTESTG_PRIVATE_STATIC(Target, MemberName)
-#define GTESTG_PRIVATE_STATIC(Target, Member) \
-    gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, Member), gtestg_private_dummy_test, Target>(nullptr, nullptr)
-
-// Macro for calling custom functions with an explicit test case object
-// Usage: GTESTG_PRIVATE_CALL(Target, FunctionName, test_obj, &obj)
-// The TestCase template parameter is inferred from test_obj's type
-#define GTESTG_PRIVATE_CALL(Target, FuncName, test_obj, ...) \
-    gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, FuncName), typename std::decay<decltype(*test_obj)>::type, Target>(test_obj, ##__VA_ARGS__)
-
-// Macro for calling custom functions from within a test (uses 'this')
-// Usage: GTESTG_PRIVATE_CALL_ON_TEST(ThisClass, Target, FunctionName, &obj)
-// ThisClass should match the type used in GTESTG_PRIVATE_DECLARE_FUNCTION
-#define GTESTG_PRIVATE_CALL_ON_TEST(ThisClass, Target, FuncName, ...) \
-    gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, FuncName), ThisClass, Target>(static_cast<ThisClass*>(this), ##__VA_ARGS__)
-
 
 // Macros
 // USE_GENERATOR with optional mode parameter (defaults to FULL for backward compatibility)

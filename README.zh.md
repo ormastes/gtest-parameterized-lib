@@ -339,7 +339,7 @@ TEST_G(MyTest, Example) {
 
 ## 测试中的私有成员访问
 
-该库提供了一种类型安全的方式来访问测试中的私有成员，而无需使用`#define private public`或修改生产代码。
+该库提供了一种简单、干净的方式,使用显式friend声明在测试中访问私有成员。
 
 ### 快速示例
 
@@ -349,113 +349,191 @@ class MyClass {
 private:
     int privateValue;
     std::string privateName;
+
+    int computeSecret(int x) const { return privateValue * x; }
+
 public:
     MyClass(int v, const std::string& n) : privateValue(v), privateName(n) {}
 
-    // 授予测试的友元访问权限
-    GTESTG_FRIEND_ACCESS_PRIVATE();
+    // 授予特定测试的friend访问权限
+    GTESTG_FRIEND_TEST(MyClassTest, AccessPrivateMembers);
+    GTESTG_FRIEND_TEST(MyClassTest, ModifyPrivateMembers);
 };
 
 // 在您的测试文件中
+struct MyClassTest : ::testing::Test {
+    MyClass obj{42, "secret"};
+};
 
+TEST_FRIEND(MyClassTest, AccessPrivateMembers) {
+    // 直接访问私有成员!
+    EXPECT_EQ(obj.privateValue, 42);
+    EXPECT_EQ(obj.privateName, "secret");
+}
 
-// 声明访问器 - 只传递字段名称
-GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateValue);
-GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateName);
+TEST_FRIEND(MyClassTest, ModifyPrivateMembers) {
+    // 可以修改私有成员
+    obj.privateValue = 100;
+    EXPECT_EQ(obj.privateValue, 100);
 
-TEST_G(MyTest, AccessPrivate) {
-    int value = GENERATOR(10, 20);
-    USE_GENERATOR();
-
-    MyClass obj(value, "test");
-
-    // 访问和修改私有成员
-    int& privateRef = GTESTG_PRIVATE_MEMBER(MyClass, privateValue, &obj);
-    EXPECT_EQ(privateRef, value);
-    privateRef = 100;
-    EXPECT_EQ(privateRef, 100);
+    // 可以调用私有方法
+    int result = obj.computeSecret(2);
+    EXPECT_EQ(result, 200);
 }
 ```
 
 ### 主要特性
 
-- **类型安全**：使用模板特化和友元声明
-- **零开销**：完全的编译时机制
-- **生产安全**：在生产构建中，`GTESTG_FRIEND_ACCESS_PRIVATE()`可以定义为空宏
-- **可共享**：声明块可以复制到通用头文件中
-- **命名空间化**：所有宏和函数都使用`GTESTG_`前缀以防止命名冲突
-- **简单的API**：参数最少，语法简洁
+- **简单干净**: 使用标准C++ friend声明
+- **选择性访问**: 仅授予需要的特定测试访问权限
+- **零开销**: 纯编译时机制,无运行时成本
+- **类型安全**: 编译器保证的类型安全
+- **生产安全**: friend声明不会影响运行时
 
 ### API参考
 
-#### 声明访问
+#### 目标类宏
 
-| 宏 | 用途 | 参数 | 示例 |
-|-------|---------|------------|---------|
-| `GTESTG_PRIVATE_DECLARE_MEMBER` | 访问实例成员 | Target, MemberName | `GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateField)` |
-| `GTESTG_PRIVATE_DECLARE_STATIC` | 访问静态成员 | Target, MemberName | `GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter)` |
-| `GTESTG_PRIVATE_DECLARE_FUNCTION` | 自定义访问器函数 | ThisClass, Target, FuncName | `GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum)` |
+| 宏 | 目的 | 用法 |
+|-------|---------|-------|
+| `GTESTG_FRIEND_TEST(Suite, TestName)` | 授予特定TEST_F测试的friend访问权限 | 放置在类定义中 |
+| `GTESTG_FRIEND_TEST_G(TestClassName, TestName)` | 授予TEST_G测试的friend访问权限 | 放置在类定义中 |
+| `GTESTG_FRIEND_TEST_SUITE(Suite)` | 授予套件中所有测试的friend访问权限 | 放置在类定义中 |
 
-#### 访问成员
+#### 测试文件宏
 
-| 宏 | 用途 | 参数 | 示例 |
-|-------|---------|------------|---------|
-| `GTESTG_PRIVATE_MEMBER` | 访问实例成员 | Target, MemberName, &obj | `GTESTG_PRIVATE_MEMBER(MyClass, privateField, &obj)` |
-| `GTESTG_PRIVATE_STATIC` | 访问静态成员 | Target, MemberName | `GTESTG_PRIVATE_STATIC(MyClass, staticCounter)` |
-| `GTESTG_PRIVATE_CALL` | 使用显式测试对象调用自定义函数 | Target, FuncName, test_obj, &obj | `GTESTG_PRIVATE_CALL(MyClass, GetSum, this, &obj)` |
-| `GTESTG_PRIVATE_CALL_ON_TEST` | 调用自定义函数（使用隐式'this'） | ThisClass, Target, FuncName, &obj | `GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj)` |
+| 宏 | 目的 | 用法 |
+|-------|---------|-------|
+| `TEST_FRIEND(Suite, TestName)` | 定义具有friend访问权限的测试 | 与TEST_F相同 |
+| `TEST_G_FRIEND(TestClassName, TestName)` | 定义具有friend访问权限的生成器测试 | 与TEST_G相同 |
 
 ### 使用示例
 
-**实例成员：**
+#### 基本私有访问
 ```cpp
-// 声明
-GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateField);
+// 目标类
+class Widget {
+private:
+    int secret_ = 42;
+public:
+    // 授予特定测试的访问权限
+    GTESTG_FRIEND_TEST(WidgetTest, CheckSecret);
+};
 
-// 在测试中访问
-int& value = GTESTG_PRIVATE_MEMBER(MyClass, privateField, &obj);
-value = 42;  // 可以修改
+// 测试文件
+struct WidgetTest : ::testing::Test {
+    Widget w;
+};
+
+TEST_FRIEND(WidgetTest, CheckSecret) {
+    EXPECT_EQ(w.secret_, 42);  // 直接访问私有成员
+}
 ```
 
-**静态成员：**
+#### 具有私有访问的生成器测试
 ```cpp
-// 声明
-GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter);
+// 目标类
+class Calculator {
+private:
+    int factor_ = 10;
+    int multiply(int x) const { return x * factor_; }
+public:
+    // 授予生成器测试的访问权限
+    GTESTG_FRIEND_TEST_G(CalcTest, TestMultiply);
+};
 
-// 在测试中访问
-int& count = GTESTG_PRIVATE_STATIC(MyClass, staticCounter);
-count++;  // 可以修改
+// 测试文件
+struct CalcTest : ::gtest_generator::TestWithGenerator {
+    Calculator calc;
+};
+
+TEST_G_FRIEND(CalcTest, TestMultiply) {
+    int input = GENERATOR(1, 2, 3);
+    USE_GENERATOR();
+
+    // 访问私有方法和成员
+    int result = calc.multiply(input);
+    EXPECT_EQ(result, input * calc.factor_);
+}
 ```
 
-**自定义函数：**
+#### 授予套件中所有测试的访问权限
 ```cpp
-// 使用自定义逻辑声明
-// THIS 提供测试上下文，TARGET 是被访问的对象
-GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum) {
-    // 如果需要可以访问测试参数：THIS->GetParam()
-    // 访问目标对象：TARGET->field1, TARGET->field2
-    return TARGET->field1 + TARGET->field2;
+// 目标类 - 授予MyTestSuite中所有测试的访问权限
+class MyClass {
+private:
+    int value_ = 100;
+public:
+    // 授予整个测试套件的访问权限
+    GTESTG_FRIEND_TEST_SUITE(MyTestSuite);
+};
+
+// 测试文件 - 此套件中的所有测试都有访问权限
+struct MyTestSuite : ::testing::Test {
+    MyClass obj;
+};
+
+TEST_F(MyTestSuite, Test1) {
+    EXPECT_EQ(obj.value_, 100);  // 有访问权限
 }
 
-// 在 TEST_G(MyTest, ...) 中调用
-// 选项1：使用 CALL_ON_TEST 使用隐式 'this'
-int sum1 = GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj);
-
-// 选项2：使用 CALL 显式传递测试对象
-int sum2 = GTESTG_PRIVATE_CALL(MyClass, GetSum, this, &obj);
+TEST_F(MyTestSuite, Test2) {
+    obj.value_ = 200;  // 也有访问权限
+    EXPECT_EQ(obj.value_, 200);
+}
 ```
 
-**自定义函数中的参数名：**
-- `THIS` - 指向测试夹具实例的指针（提供像`GetParam()`这样的测试上下文）
-- `TARGET` - 指向您正在访问其私有成员的对象的指针
+#### 使用继承
+```cpp
+// 基类
+class Base {
+private:
+    int base_secret_ = 10;
+public:
+    GTESTG_FRIEND_TEST(DerivedTest, AccessBoth);
+};
 
-**实现说明：**
-- 库使用带有友元声明的模板特化来实现类型安全访问
-- ALIGNED模式中的列索引跟踪在测试参数之间自动重置（在最新版本中已修复）
-- 所有宏都使用`GTESTG_`前缀以避免命名冲突
+// 派生类
+class Derived : public Base {
+private:
+    int derived_secret_ = 20;
+public:
+    GTESTG_FRIEND_TEST(DerivedTest, AccessBoth);
+};
 
-有关完整示例，请参见`test_private_access.cpp`和`example_common_header.h`。
+// 测试
+struct DerivedTest : ::testing::Test {
+    Derived d;
+};
 
+TEST_FRIEND(DerivedTest, AccessBoth) {
+    EXPECT_EQ(d.base_secret_, 10);     // 访问基类私有成员
+    EXPECT_EQ(d.derived_secret_, 20);  // 访问派生类私有成员
+}
+```
+
+### 重要说明
+
+1. **需要显式授权**: 每个需要私有访问的测试必须在目标类中显式列出
+2. **没有魔法**: 使用标准C++ friend声明 - 简单且可预测
+3. **TEST_FRIEND是可选的**: `TEST_FRIEND`只是一个映射到`TEST_F`的便利宏。如果类有适当的`GTESTG_FRIEND_TEST`声明,您可以使用常规`TEST_F`
+4. **编译时安全**: 如果测试尝试在未授予friend访问权限的情况下访问私有成员,您将收到编译错误
+5. **维护**: 添加需要私有访问的新测试时,记得向目标类添加相应的`GTESTG_FRIEND_TEST`声明
+
+### 何时使用此功能
+
+在以下情况使用私有成员访问:
+- 测试未通过公共接口公开的内部状态
+- 验证复杂的私有逻辑
+- 为测试设置特定的内部状态
+- 测试无法轻松重构的遗留代码
+
+在以下情况避免使用:
+- 对私有访问的需求表明设计不佳
+- 公共接口测试就足够了
+- 会在测试和实现之间创建紧密耦合
+
+有关完整示例,请参见`test_friend_access.cpp`。
 ## 数组比较宏
 
 该库提供了方便的宏，用于逐元素比较数组并提供详细的错误消息。这些宏构建在Google Test的断言宏之上。

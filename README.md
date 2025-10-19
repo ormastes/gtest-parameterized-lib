@@ -526,7 +526,7 @@ Test: a=2, b=20
 
 ## Private Member Access for Testing
 
-The library provides a type-safe way to access private members in tests without using `#define private public` or modifying production code.
+The library provides a simple, clean way to access private members in tests using explicit friend declarations.
 
 ### Quick Example
 
@@ -536,110 +536,191 @@ class MyClass {
 private:
     int privateValue;
     std::string privateName;
+
+    int computeSecret(int x) const { return privateValue * x; }
+
 public:
     MyClass(int v, const std::string& n) : privateValue(v), privateName(n) {}
 
-    // Grant friend access for testing
-    GTESTG_FRIEND_ACCESS_PRIVATE();
+    // Grant friend access to specific tests
+    GTESTG_FRIEND_TEST(MyClassTest, AccessPrivateMembers);
+    GTESTG_FRIEND_TEST(MyClassTest, ModifyPrivateMembers);
 };
 
 // In your test file
-// Declare accessors - simple and clean
-GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateValue);
-GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateName);
+struct MyClassTest : ::testing::Test {
+    MyClass obj{42, "secret"};
+};
 
-TEST_G(MyTest, AccessPrivate) {
-    int value = GENERATOR(10, 20);
-    USE_GENERATOR();
+TEST_FRIEND(MyClassTest, AccessPrivateMembers) {
+    // Direct access to private members!
+    EXPECT_EQ(obj.privateValue, 42);
+    EXPECT_EQ(obj.privateName, "secret");
+}
 
-    MyClass obj(value, "test");
+TEST_FRIEND(MyClassTest, ModifyPrivateMembers) {
+    // Can modify private members
+    obj.privateValue = 100;
+    EXPECT_EQ(obj.privateValue, 100);
 
-    // Access and modify private members - simplified API
-    int& privateRef = GTESTG_PRIVATE_MEMBER(MyClass, privateValue, &obj);
-    EXPECT_EQ(privateRef, value);
-    privateRef = 100;
-    EXPECT_EQ(privateRef, 100);
+    // Can call private methods
+    int result = obj.computeSecret(2);
+    EXPECT_EQ(result, 200);
 }
 ```
 
 ### Key Features
 
-- **Type-safe**: Uses template specialization and friend declarations
-- **Zero overhead**: Fully compile-time mechanism
-- **Production-safe**: `GTESTG_FRIEND_ACCESS_PRIVATE()` can be defined as empty macro in production builds
-- **Shareable**: The declaration block can be copied to common headers
-- **Namespaced**: All macros and functions use `GTESTG_` prefix to prevent naming conflicts
-- **Simple API**: Minimal parameters, clean syntax
+- **Simple and Clean**: Uses standard C++ friend declarations
+- **Selective Access**: Grant access only to specific tests that need it
+- **Zero Overhead**: Pure compile-time mechanism, no runtime cost
+- **Type-Safe**: Compiler-enforced type safety
+- **Production-Safe**: Friend declarations have no runtime impact
 
 ### API Reference
 
-#### Declaring Access
+#### Macros for Target Classes
 
-| Macro | Purpose | Parameters | Example |
-|-------|---------|------------|---------|
-| `GTESTG_PRIVATE_DECLARE_MEMBER` | Declare access to instance members | Target, MemberName | `GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateField)` |
-| `GTESTG_PRIVATE_DECLARE_STATIC` | Declare access to static members | Target, MemberName | `GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter)` |
-| `GTESTG_PRIVATE_DECLARE_FUNCTION` | Declare custom accessor function | ThisClass, Target, FuncName | `GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum)` |
+| Macro | Purpose | Usage |
+|-------|---------|-------|
+| `GTESTG_FRIEND_TEST(Suite, TestName)` | Grant friend access to a specific TEST_F test | Place in class definition |
+| `GTESTG_FRIEND_TEST_G(TestClassName, TestName)` | Grant friend access to a TEST_G test | Place in class definition |
+| `GTESTG_FRIEND_TEST_SUITE(Suite)` | Grant friend access to all tests in a suite | Place in class definition |
 
-#### Accessing Members
+#### Macros for Test Files
 
-| Macro | Purpose | Parameters | Example |
-|-------|---------|------------|---------|
-| `GTESTG_PRIVATE_MEMBER` | Access instance member | Target, MemberName, &obj | `GTESTG_PRIVATE_MEMBER(MyClass, privateField, &obj)` |
-| `GTESTG_PRIVATE_STATIC` | Access static member | Target, MemberName | `GTESTG_PRIVATE_STATIC(MyClass, staticCounter)` |
-| `GTESTG_PRIVATE_CALL` | Call custom function with explicit test object | Target, FuncName, test_obj, &obj | `GTESTG_PRIVATE_CALL(MyClass, GetSum, this, &obj)` |
-| `GTESTG_PRIVATE_CALL_ON_TEST` | Call custom function (uses implicit 'this') | ThisClass, Target, FuncName, &obj | `GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj)` |
+| Macro | Purpose | Usage |
+|-------|---------|-------|
+| `TEST_FRIEND(Suite, TestName)` | Define a test with friend access | Same as TEST_F |
+| `TEST_G_FRIEND(TestClassName, TestName)` | Define a generator test with friend access | Same as TEST_G |
 
 ### Usage Examples
 
-**Instance Members:**
+#### Basic Private Access
 ```cpp
-// Declare
-GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateField);
+// Target class
+class Widget {
+private:
+    int secret_ = 42;
+public:
+    // Grant access to specific test
+    GTESTG_FRIEND_TEST(WidgetTest, CheckSecret);
+};
 
-// Access in test
-int& value = GTESTG_PRIVATE_MEMBER(MyClass, privateField, &obj);
-value = 42;  // Can modify
+// Test file
+struct WidgetTest : ::testing::Test {
+    Widget w;
+};
+
+TEST_FRIEND(WidgetTest, CheckSecret) {
+    EXPECT_EQ(w.secret_, 42);  // Direct access to private member
+}
 ```
 
-**Static Members:**
+#### Generator Tests with Private Access
 ```cpp
-// Declare
-GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter);
+// Target class
+class Calculator {
+private:
+    int factor_ = 10;
+    int multiply(int x) const { return x * factor_; }
+public:
+    // Grant access to generator test
+    GTESTG_FRIEND_TEST_G(CalcTest, TestMultiply);
+};
 
-// Access in test
-int& count = GTESTG_PRIVATE_STATIC(MyClass, staticCounter);
-count++;  // Can modify
+// Test file
+struct CalcTest : ::gtest_generator::TestWithGenerator {
+    Calculator calc;
+};
+
+TEST_G_FRIEND(CalcTest, TestMultiply) {
+    int input = GENERATOR(1, 2, 3);
+    USE_GENERATOR();
+
+    // Access private method and member
+    int result = calc.multiply(input);
+    EXPECT_EQ(result, input * calc.factor_);
+}
 ```
 
-**Custom Functions:**
+#### Grant Access to All Tests in a Suite
 ```cpp
-// Declare with custom logic
-// THIS provides test context, TARGET is the object being accessed
-GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum) {
-    // Access test parameter if needed: THIS->GetParam()
-    // Access target object: TARGET->field1, TARGET->field2
-    return TARGET->field1 + TARGET->field2;
+// Target class - grants access to ALL tests in MyTestSuite
+class MyClass {
+private:
+    int value_ = 100;
+public:
+    // Grant access to entire test suite
+    GTESTG_FRIEND_TEST_SUITE(MyTestSuite);
+};
+
+// Test file - all tests in this suite have access
+struct MyTestSuite : ::testing::Test {
+    MyClass obj;
+};
+
+TEST_F(MyTestSuite, Test1) {
+    EXPECT_EQ(obj.value_, 100);  // Has access
 }
 
-// Call from within TEST_G(MyTest, ...)
-// Option 1: Use implicit 'this' with CALL_ON_TEST
-int sum1 = GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj);
-
-// Option 2: Pass test object explicitly with CALL
-int sum2 = GTESTG_PRIVATE_CALL(MyClass, GetSum, this, &obj);
+TEST_F(MyTestSuite, Test2) {
+    obj.value_ = 200;  // Also has access
+    EXPECT_EQ(obj.value_, 200);
+}
 ```
 
-**Parameter Names in Custom Functions:**
-- `THIS` - Pointer to the test fixture instance (provides test context like `GetParam()`)
-- `TARGET` - Pointer to the object whose private members you're accessing
+#### Working with Inheritance
+```cpp
+// Base class
+class Base {
+private:
+    int base_secret_ = 10;
+public:
+    GTESTG_FRIEND_TEST(DerivedTest, AccessBoth);
+};
 
-**Implementation Notes:**
-- The library uses template specialization with friend declarations for type-safe access
-- Column index tracking in ALIGNED mode automatically resets between test parameters (fixed in recent version)
-- All macros use the `GTESTG_` prefix to avoid naming conflicts
+// Derived class
+class Derived : public Base {
+private:
+    int derived_secret_ = 20;
+public:
+    GTESTG_FRIEND_TEST(DerivedTest, AccessBoth);
+};
 
-See `test_private_access.cpp` and `example_common_header.h` for complete examples.
+// Test
+struct DerivedTest : ::testing::Test {
+    Derived d;
+};
+
+TEST_FRIEND(DerivedTest, AccessBoth) {
+    EXPECT_EQ(d.base_secret_, 10);     // Access base private
+    EXPECT_EQ(d.derived_secret_, 20);  // Access derived private
+}
+```
+
+### Important Notes
+
+1. **Explicit Grant Required**: Each test that needs private access must be explicitly listed in the target class
+2. **No Magic**: Uses standard C++ friend declarations - simple and predictable
+3. **TEST_FRIEND is Optional**: `TEST_FRIEND` is just a convenience macro that maps to `TEST_F`. You can use regular `TEST_F` if the class has the appropriate `GTESTG_FRIEND_TEST` declaration
+4. **Compile-Time Safety**: If a test tries to access private members without being granted friend access, you'll get a compile error
+5. **Maintenance**: When you add a new test that needs private access, remember to add the corresponding `GTESTG_FRIEND_TEST` declaration to the target class
+
+### When to Use This Feature
+
+Use private member access when:
+- Testing internal state that isn't exposed through public interface
+- Verifying complex private logic
+- Setting up specific internal states for testing
+- Testing legacy code that can't be easily refactored
+
+Avoid using when:
+- The need for private access indicates poor design
+- Public interface testing would be sufficient
+- It would create tight coupling between tests and implementation
+
+See `test_friend_access.cpp` for complete examples.
 
 ## Array Comparison Macros
 

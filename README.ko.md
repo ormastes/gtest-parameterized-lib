@@ -339,7 +339,7 @@ TEST_G(MyTest, Example) {
 
 ## 테스트를 위한 Private 멤버 접근
 
-이 라이브러리는 `#define private public`을 사용하거나 프로덕션 코드를 수정하지 않고도 테스트에서 private 멤버에 접근할 수 있는 타입 안전한 방법을 제공합니다.
+라이브러리는 명시적인 friend 선언을 사용하여 테스트에서 private 멤버에 접근하는 간단하고 깔끔한 방법을 제공합니다.
 
 ### 빠른 예제
 
@@ -349,113 +349,191 @@ class MyClass {
 private:
     int privateValue;
     std::string privateName;
+
+    int computeSecret(int x) const { return privateValue * x; }
+
 public:
     MyClass(int v, const std::string& n) : privateValue(v), privateName(n) {}
 
-    // 테스트를 위한 friend 접근 허용
-    GTESTG_FRIEND_ACCESS_PRIVATE();
+    // 특정 테스트에 friend 접근 권한 부여
+    GTESTG_FRIEND_TEST(MyClassTest, AccessPrivateMembers);
+    GTESTG_FRIEND_TEST(MyClassTest, ModifyPrivateMembers);
 };
 
 // 테스트 파일에서
+struct MyClassTest : ::testing::Test {
+    MyClass obj{42, "secret"};
+};
 
+TEST_FRIEND(MyClassTest, AccessPrivateMembers) {
+    // private 멤버에 직접 접근!
+    EXPECT_EQ(obj.privateValue, 42);
+    EXPECT_EQ(obj.privateName, "secret");
+}
 
-// 접근자 선언 - 필드 이름만 전달
-GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateValue);
-GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateName);
+TEST_FRIEND(MyClassTest, ModifyPrivateMembers) {
+    // private 멤버 수정 가능
+    obj.privateValue = 100;
+    EXPECT_EQ(obj.privateValue, 100);
 
-TEST_G(MyTest, AccessPrivate) {
-    int value = GENERATOR(10, 20);
-    USE_GENERATOR();
-
-    MyClass obj(value, "test");
-
-    // private 멤버 접근 및 수정
-    int& privateRef = GTESTG_PRIVATE_MEMBER(MyClass, privateValue, &obj);
-    EXPECT_EQ(privateRef, value);
-    privateRef = 100;
-    EXPECT_EQ(privateRef, 100);
+    // private 메서드 호출 가능
+    int result = obj.computeSecret(2);
+    EXPECT_EQ(result, 200);
 }
 ```
 
 ### 주요 기능
 
-- **타입 안전**: 템플릿 특수화와 friend 선언 사용
-- **제로 오버헤드**: 완전히 컴파일 타임 메커니즘
-- **프로덕션 안전**: 프로덕션 빌드에서 `GTESTG_FRIEND_ACCESS_PRIVATE()`를 빈 매크로로 정의 가능
-- **공유 가능**: 선언 블록을 공통 헤더에 복사 가능
-- **네임스페이스 사용**: 모든 매크로와 함수는 `GTESTG_` 접두사를 사용하여 이름 충돌 방지
-- **간단한 API**: 최소한의 매개변수, 깔끔한 구문
+- **간단하고 깔끔함**: 표준 C++ friend 선언 사용
+- **선택적 접근**: 필요한 특정 테스트에만 접근 권한 부여
+- **제로 오버헤드**: 순수 컴파일 타임 메커니즘, 런타임 비용 없음
+- **타입 안전**: 컴파일러가 보장하는 타입 안전성
+- **프로덕션 안전**: friend 선언은 런타임에 영향 없음
 
 ### API 레퍼런스
 
-#### 접근 선언하기
+#### 대상 클래스용 매크로
 
-| 매크로 | 용도 | 매개변수 | 예제 |
-|-------|---------|------------|---------|
-| `GTESTG_PRIVATE_DECLARE_MEMBER` | 인스턴스 멤버 접근 | Target, MemberName | `GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateField)` |
-| `GTESTG_PRIVATE_DECLARE_STATIC` | 정적 멤버 접근 | Target, MemberName | `GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter)` |
-| `GTESTG_PRIVATE_DECLARE_FUNCTION` | 사용자 정의 접근자 함수 | ThisClass, Target, FuncName | `GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum)` |
+| 매크로 | 목적 | 사용법 |
+|-------|---------|-------|
+| `GTESTG_FRIEND_TEST(Suite, TestName)` | 특정 TEST_F 테스트에 friend 접근 권한 부여 | 클래스 정의 내에 배치 |
+| `GTESTG_FRIEND_TEST_G(TestClassName, TestName)` | TEST_G 테스트에 friend 접근 권한 부여 | 클래스 정의 내에 배치 |
+| `GTESTG_FRIEND_TEST_SUITE(Suite)` | 스위트의 모든 테스트에 friend 접근 권한 부여 | 클래스 정의 내에 배치 |
 
-#### 멤버 접근하기
+#### 테스트 파일용 매크로
 
-| 매크로 | 용도 | 매개변수 | 예제 |
-|-------|---------|------------|---------|
-| `GTESTG_PRIVATE_MEMBER` | 인스턴스 멤버 접근 | Target, MemberName, &obj | `GTESTG_PRIVATE_MEMBER(MyClass, privateField, &obj)` |
-| `GTESTG_PRIVATE_STATIC` | 정적 멤버 접근 | Target, MemberName | `GTESTG_PRIVATE_STATIC(MyClass, staticCounter)` |
-| `GTESTG_PRIVATE_CALL` | 명시적 테스트 객체로 사용자 정의 함수 호출 | Target, FuncName, test_obj, &obj | `GTESTG_PRIVATE_CALL(MyClass, GetSum, this, &obj)` |
-| `GTESTG_PRIVATE_CALL_ON_TEST` | 사용자 정의 함수 호출 (암시적 'this' 사용) | ThisClass, Target, FuncName, &obj | `GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj)` |
+| 매크로 | 목적 | 사용법 |
+|-------|---------|-------|
+| `TEST_FRIEND(Suite, TestName)` | friend 접근 권한이 있는 테스트 정의 | TEST_F와 동일 |
+| `TEST_G_FRIEND(TestClassName, TestName)` | friend 접근 권한이 있는 생성기 테스트 정의 | TEST_G와 동일 |
 
 ### 사용 예제
 
-**인스턴스 멤버:**
+#### 기본 Private 접근
 ```cpp
-// 선언
-GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateField);
+// 대상 클래스
+class Widget {
+private:
+    int secret_ = 42;
+public:
+    // 특정 테스트에 접근 권한 부여
+    GTESTG_FRIEND_TEST(WidgetTest, CheckSecret);
+};
 
-// 테스트에서 접근
-int& value = GTESTG_PRIVATE_MEMBER(MyClass, privateField, &obj);
-value = 42;  // 수정 가능
+// 테스트 파일
+struct WidgetTest : ::testing::Test {
+    Widget w;
+};
+
+TEST_FRIEND(WidgetTest, CheckSecret) {
+    EXPECT_EQ(w.secret_, 42);  // private 멤버에 직접 접근
+}
 ```
 
-**정적 멤버:**
+#### Private 접근이 있는 생성기 테스트
 ```cpp
-// 선언
-GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter);
+// 대상 클래스
+class Calculator {
+private:
+    int factor_ = 10;
+    int multiply(int x) const { return x * factor_; }
+public:
+    // 생성기 테스트에 접근 권한 부여
+    GTESTG_FRIEND_TEST_G(CalcTest, TestMultiply);
+};
 
-// 테스트에서 접근
-int& count = GTESTG_PRIVATE_STATIC(MyClass, staticCounter);
-count++;  // 수정 가능
+// 테스트 파일
+struct CalcTest : ::gtest_generator::TestWithGenerator {
+    Calculator calc;
+};
+
+TEST_G_FRIEND(CalcTest, TestMultiply) {
+    int input = GENERATOR(1, 2, 3);
+    USE_GENERATOR();
+
+    // private 메서드와 멤버에 접근
+    int result = calc.multiply(input);
+    EXPECT_EQ(result, input * calc.factor_);
+}
 ```
 
-**사용자 정의 함수:**
+#### 스위트의 모든 테스트에 접근 권한 부여
 ```cpp
-// 사용자 정의 로직으로 선언
-// THIS는 테스트 컨텍스트를 제공하고, TARGET은 접근 중인 객체입니다
-GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum) {
-    // 필요한 경우 테스트 매개변수 접근: THIS->GetParam()
-    // 대상 객체 접근: TARGET->field1, TARGET->field2
-    return TARGET->field1 + TARGET->field2;
+// 대상 클래스 - MyTestSuite의 모든 테스트에 접근 권한 부여
+class MyClass {
+private:
+    int value_ = 100;
+public:
+    // 전체 테스트 스위트에 접근 권한 부여
+    GTESTG_FRIEND_TEST_SUITE(MyTestSuite);
+};
+
+// 테스트 파일 - 이 스위트의 모든 테스트가 접근 가능
+struct MyTestSuite : ::testing::Test {
+    MyClass obj;
+};
+
+TEST_F(MyTestSuite, Test1) {
+    EXPECT_EQ(obj.value_, 100);  // 접근 가능
 }
 
-// TEST_G(MyTest, ...) 내부에서 호출
-// 옵션 1: CALL_ON_TEST로 암시적 'this' 사용
-int sum1 = GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj);
-
-// 옵션 2: CALL로 테스트 객체를 명시적으로 전달
-int sum2 = GTESTG_PRIVATE_CALL(MyClass, GetSum, this, &obj);
+TEST_F(MyTestSuite, Test2) {
+    obj.value_ = 200;  // 역시 접근 가능
+    EXPECT_EQ(obj.value_, 200);
+}
 ```
 
-**사용자 정의 함수의 매개변수 이름:**
-- `THIS` - 테스트 픽스처 인스턴스에 대한 포인터 (`GetParam()`과 같은 테스트 컨텍스트 제공)
-- `TARGET` - private 멤버에 접근 중인 객체에 대한 포인터
+#### 상속과 함께 작업
+```cpp
+// 기본 클래스
+class Base {
+private:
+    int base_secret_ = 10;
+public:
+    GTESTG_FRIEND_TEST(DerivedTest, AccessBoth);
+};
 
-**구현 참고사항:**
-- 라이브러리는 타입 안전 접근을 위해 friend 선언과 함께 템플릿 특수화를 사용합니다
-- ALIGNED 모드에서 열 인덱스 추적은 테스트 매개변수 간에 자동으로 재설정됩니다 (최신 버전에서 수정됨)
-- 모든 매크로는 이름 충돌을 피하기 위해 `GTESTG_` 접두사를 사용합니다
+// 파생 클래스
+class Derived : public Base {
+private:
+    int derived_secret_ = 20;
+public:
+    GTESTG_FRIEND_TEST(DerivedTest, AccessBoth);
+};
 
-전체 예제는 `test_private_access.cpp`와 `example_common_header.h`를 참조하세요.
+// 테스트
+struct DerivedTest : ::testing::Test {
+    Derived d;
+};
 
+TEST_FRIEND(DerivedTest, AccessBoth) {
+    EXPECT_EQ(d.base_secret_, 10);     // 기본 private에 접근
+    EXPECT_EQ(d.derived_secret_, 20);  // 파생 private에 접근
+}
+```
+
+### 중요 참고사항
+
+1. **명시적 권한 부여 필요**: private 접근이 필요한 각 테스트는 대상 클래스에 명시적으로 나열되어야 합니다
+2. **마법 없음**: 표준 C++ friend 선언 사용 - 간단하고 예측 가능
+3. **TEST_FRIEND는 선택사항**: `TEST_FRIEND`는 `TEST_F`로 매핑되는 편의 매크로입니다. 클래스에 적절한 `GTESTG_FRIEND_TEST` 선언이 있는 경우 일반 `TEST_F`를 사용할 수 있습니다
+4. **컴파일 타임 안전성**: friend 접근 권한이 부여되지 않은 상태에서 테스트가 private 멤버에 접근하려고 하면 컴파일 오류가 발생합니다
+5. **유지보수**: private 접근이 필요한 새 테스트를 추가할 때 대상 클래스에 해당 `GTESTG_FRIEND_TEST` 선언을 추가하는 것을 잊지 마세요
+
+### 이 기능을 사용할 때
+
+다음과 같은 경우 private 멤버 접근을 사용하세요:
+- 공개 인터페이스를 통해 노출되지 않는 내부 상태 테스트
+- 복잡한 private 로직 검증
+- 테스트를 위한 특정 내부 상태 설정
+- 쉽게 리팩터링할 수 없는 레거시 코드 테스트
+
+다음과 같은 경우 사용을 피하세요:
+- private 접근의 필요성이 잘못된 설계를 나타내는 경우
+- 공개 인터페이스 테스트로 충분한 경우
+- 테스트와 구현 간에 밀접한 결합을 생성하는 경우
+
+전체 예제는 `test_friend_access.cpp`를 참조하세요.
 ## 배열 비교 매크로
 
 라이브러리는 상세한 오류 메시지와 함께 배열을 요소별로 비교할 수 있는 편리한 매크로를 제공합니다. 이러한 매크로는 Google Test의 assertion 매크로를 기반으로 구축되었습니다.

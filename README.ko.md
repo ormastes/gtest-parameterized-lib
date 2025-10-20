@@ -20,10 +20,11 @@ class MyTest : public ::gtest_generator::TestWithGenerator {
 
 // TEST_G 매크로를 사용하여 매개변수화된 테스트 작성
 TEST_G(MyTest, SimpleCase) {
-    // 중요: 모든 GENERATOR() 호출은 USE_GENERATOR() 이전에 와야 합니다
+    // ⚠️ 중요: GENERATOR() 호출은 반드시 맨 위에, USE_GENERATOR() 이전에 와야 합니다
+    // 이 순서는 필수입니다 - 라이브러리가 테스트를 실행하기 전에 생성기를 계산합니다
     int a = GENERATOR(1, 2);      // 1 또는 2가 됩니다
     int b = GENERATOR(10, 20);    // 10 또는 20이 됩니다
-    USE_GENERATOR();              // 모든 GENERATOR() 호출 후에 호출해야 합니다
+    USE_GENERATOR();              // 반드시 모든 GENERATOR() 호출 후에 와야 합니다
 
     EXPECT_LT(a, b);
     printf("테스트: a=%d, b=%d\n", a, b);
@@ -286,27 +287,47 @@ TEST_G(ModeCountTest, Aligned_3x2x2) {
 
 ## 중요 사용 참고사항
 
-### 올바른 순서가 중요합니다
+### ⚠️ 중요: GENERATOR와 USE_GENERATOR 순서
+
+**매우 중요:** 모든 `GENERATOR()` 호출은 **반드시** 테스트 케이스의 **맨 위**에서 `USE_GENERATOR()` **이전**에 와야 합니다. 이 순서는 라이브러리가 올바르게 작동하기 위해 필수입니다.
 
 ✅ **올바른 예**:
 ```cpp
 TEST_G(MyTest, Example) {
-    int a = GENERATOR(1, 2);     // 먼저: 생성기 정의
-    int b = GENERATOR(10, 20);   // 
-    USE_GENERATOR();             // 그 다음: USE_GENERATOR() 호출
-    // 여기에 테스트 로직
+    // 1단계: 맨 위에 모든 GENERATOR() 호출을 먼저
+    int a = GENERATOR(1, 2);
+    int b = GENERATOR(10, 20);
+
+    // 2단계: 모든 생성기 후에 USE_GENERATOR()
+    USE_GENERATOR();
+
+    // 3단계: 여기에 테스트 로직
+    EXPECT_LT(a, b);
 }
 ```
 
-❌ **잘못된 예**:
+❌ **잘못된 예 - 작동하지 않습니다**:
 ```cpp
 TEST_G(MyTest, Example) {
-    USE_GENERATOR();             // 잘못됨! GENERATOR 호출 이후에 와야 합니다
-    int a = GENERATOR(1, 2);     
-    int b = GENERATOR(10, 20);   
-    // 여기에 테스트 로직
+    USE_GENERATOR();             // ❌ 잘못됨! 생성기 이후에 와야 합니다
+    int a = GENERATOR(1, 2);     // ❌ 너무 늦었습니다!
+    int b = GENERATOR(10, 20);
 }
 ```
+
+❌ **잘못된 예 - 작동하지 않습니다**:
+```cpp
+TEST_G(MyTest, Example) {
+    int a = GENERATOR(1, 2);
+    USE_GENERATOR();             // ❌ 잘못됨! 모든 생성기 이후에 와야 합니다
+    int b = GENERATOR(10, 20);   // ❌ 이 생성기는 USE_GENERATOR() 이후입니다
+}
+```
+
+**이것이 중요한 이유:**
+- 라이브러리는 사전 실행 단계에서 생성기를 계산합니다
+- `USE_GENERATOR()`는 생성기 선언 단계의 끝을 표시합니다
+- `USE_GENERATOR()` 이후에 선언된 생성기는 무시되거나 오류를 발생시킵니다
 
 ## 예제 출력
 
@@ -534,6 +555,65 @@ TEST_FRIEND(DerivedTest, AccessBoth) {
 - 테스트와 구현 간에 밀접한 결합을 생성하는 경우
 
 전체 예제는 `test_friend_access.cpp`를 참조하세요.
+
+### TEST_FRIEND 및 TEST_G_FRIEND 매크로
+
+라이브러리는 VirtualAccessor 패턴에 대한 내장 지원과 함께 테스트 인프라를 생성하는 `TEST_FRIEND` 및 `TEST_G_FRIEND` 매크로를 제공합니다. 이러한 매크로는 `GTESTG_FRIEND_ACCESS_PRIVATE()` 선언과 원활하게 작동합니다.
+
+**주요 사항:**
+- `GTESTG_FRIEND_ACCESS_PRIVATE()`는 클래스 기반(VirtualAccessor)과 함수 기반(gtestg_private_accessMember) 접근 방식 **모두**에 대한 friend 액세스를 부여합니다
+- 일반 TEST_F 스타일 테스트에는 `TEST_FRIEND`를 사용하세요
+- 생성기 기반 매개변수화 테스트에는 `TEST_G_FRIEND`를 사용하세요
+- private 멤버에 액세스하려면 `GTESTG_PRIVATE_MEMBER` 매크로를 계속 사용하세요
+
+**TEST_FRIEND 예제:**
+```cpp
+class Widget {
+private:
+    int secret_ = 42;
+public:
+    Widget() = default;
+
+    // 단일 매크로로 두 가지 유형의 friend 액세스를 부여합니다
+    GTESTG_FRIEND_ACCESS_PRIVATE();
+};
+
+// 액세서 선언
+GTESTG_PRIVATE_DECLARE_MEMBER(Widget, secret_);
+
+struct WidgetTest : ::testing::Test {
+    Widget w;
+};
+
+TEST_FRIEND(WidgetTest, AccessPrivate) {
+    // 함수 기반 액세서를 사용하여 private 멤버에 액세스
+    int& secret = GTESTG_PRIVATE_MEMBER(Widget, secret_, &w);
+    EXPECT_EQ(secret, 42);
+    secret = 100;
+    EXPECT_EQ(secret, 100);
+}
+```
+
+**TEST_G_FRIEND 예제:**
+```cpp
+struct WidgetGenTest : ::gtest_generator::TestWithGenerator {
+    Widget w{999};
+};
+
+TEST_G_FRIEND(WidgetGenTest, GeneratorTest) {
+    int factor = GENERATOR(1, 2, 5);
+    USE_GENERATOR();
+
+    int& secret = GTESTG_PRIVATE_MEMBER(Widget, secret_, &w);
+    EXPECT_EQ(secret, 999);
+
+    printf("factor=%d, secret=%d\n", factor, secret);
+}
+```
+
+**다중 파일 지원:**
+`TEST_FRIEND` 및 `TEST_G_FRIEND`는 일반 `TEST_G`와 마찬가지로 동일한 실행 파일에 링크된 여러 .cpp 파일에서 테스트가 정의된 경우에도 올바르게 작동합니다. 예제는 `test_friend_multi_file1.cpp` 및 `test_friend_multi_file2.cpp`를 참조하세요.
+
 ## 배열 비교 매크로
 
 라이브러리는 상세한 오류 메시지와 함께 배열을 요소별로 비교할 수 있는 편리한 매크로를 제공합니다. 이러한 매크로는 Google Test의 assertion 매크로를 기반으로 구축되었습니다.

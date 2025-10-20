@@ -20,7 +20,8 @@ class MyTest : public ::gtest_generator::TestWithGenerator {
 
 // 使用TEST_G宏编写参数化测试
 TEST_G(MyTest, SimpleCase) {
-    // 重要：所有GENERATOR()调用必须在USE_GENERATOR()之前
+    // ⚠️ 重要: GENERATOR()调用必须在顶部，在USE_GENERATOR()之前
+    // 这个顺序是强制性的 - 库在执行测试之前需要计数生成器
     int a = GENERATOR(1, 2);      // 将是1或2
     int b = GENERATOR(10, 20);    // 将是10或20
     USE_GENERATOR();              // 必须在所有GENERATOR()调用之后调用
@@ -286,27 +287,47 @@ TEST_G(ModeCountTest, Aligned_3x2x2) {
 
 ## 重要使用说明
 
-### 正确的顺序至关重要
+### ⚠️ 重要: GENERATOR和USE_GENERATOR顺序
+
+**非常重要:** 所有`GENERATOR()`调用**必须**在测试用例的**顶部**，在`USE_GENERATOR()`**之前**。这个顺序对于库的正确工作是强制性的。
 
 ✅ **正确**:
 ```cpp
 TEST_G(MyTest, Example) {
-    int a = GENERATOR(1, 2);     // 首先：定义生成器
-    int b = GENERATOR(10, 20);   // 
-    USE_GENERATOR();             // 然后：调用USE_GENERATOR()
-    // 这里是测试逻辑
+    // 步骤1: 所有GENERATOR()调用首先在顶部
+    int a = GENERATOR(1, 2);
+    int b = GENERATOR(10, 20);
+
+    // 步骤2: 在所有生成器之后USE_GENERATOR()
+    USE_GENERATOR();
+
+    // 步骤3: 这里是测试逻辑
+    EXPECT_LT(a, b);
 }
 ```
 
-❌ **错误**:
+❌ **错误 - 不会工作**:
 ```cpp
 TEST_G(MyTest, Example) {
-    USE_GENERATOR();             // 错误！这必须在GENERATOR调用之后
-    int a = GENERATOR(1, 2);     
-    int b = GENERATOR(10, 20);   
-    // 这里是测试逻辑
+    USE_GENERATOR();             // ❌ 错误！必须在生成器之后
+    int a = GENERATOR(1, 2);     // ❌ 太晚了！
+    int b = GENERATOR(10, 20);
 }
 ```
+
+❌ **错误 - 不会工作**:
+```cpp
+TEST_G(MyTest, Example) {
+    int a = GENERATOR(1, 2);
+    USE_GENERATOR();             // ❌ 错误！必须在所有生成器之后
+    int b = GENERATOR(10, 20);   // ❌ 这个生成器在USE_GENERATOR()之后
+}
+```
+
+**为什么这很重要:**
+- 库在预执行阶段计数生成器
+- `USE_GENERATOR()`标记生成器声明阶段的结束
+- 在`USE_GENERATOR()`之后声明的生成器将被忽略或导致错误
 
 ## 示例输出
 
@@ -534,6 +555,65 @@ TEST_FRIEND(DerivedTest, AccessBoth) {
 - 会在测试和实现之间创建紧密耦合
 
 有关完整示例,请参见`test_friend_access.cpp`。
+
+### TEST_FRIEND和TEST_G_FRIEND宏
+
+库提供了`TEST_FRIEND`和`TEST_G_FRIEND`宏，它们创建具有VirtualAccessor模式内置支持的测试基础设施。这些宏与`GTESTG_FRIEND_ACCESS_PRIVATE()`声明无缝协作。
+
+**关键点:**
+- `GTESTG_FRIEND_ACCESS_PRIVATE()`为基于类的(VirtualAccessor)和基于函数的(gtestg_private_accessMember)方法**都**授予friend访问权限
+- 对于常规TEST_F风格的测试使用`TEST_FRIEND`
+- 对于基于生成器的参数化测试使用`TEST_G_FRIEND`
+- 继续使用`GTESTG_PRIVATE_MEMBER`宏访问私有成员
+
+**TEST_FRIEND示例:**
+```cpp
+class Widget {
+private:
+    int secret_ = 42;
+public:
+    Widget() = default;
+
+    // 单个宏授予两种类型的friend访问权限
+    GTESTG_FRIEND_ACCESS_PRIVATE();
+};
+
+// 声明访问器
+GTESTG_PRIVATE_DECLARE_MEMBER(Widget, secret_);
+
+struct WidgetTest : ::testing::Test {
+    Widget w;
+};
+
+TEST_FRIEND(WidgetTest, AccessPrivate) {
+    // 使用基于函数的访问器访问私有成员
+    int& secret = GTESTG_PRIVATE_MEMBER(Widget, secret_, &w);
+    EXPECT_EQ(secret, 42);
+    secret = 100;
+    EXPECT_EQ(secret, 100);
+}
+```
+
+**TEST_G_FRIEND示例:**
+```cpp
+struct WidgetGenTest : ::gtest_generator::TestWithGenerator {
+    Widget w{999};
+};
+
+TEST_G_FRIEND(WidgetGenTest, GeneratorTest) {
+    int factor = GENERATOR(1, 2, 5);
+    USE_GENERATOR();
+
+    int& secret = GTESTG_PRIVATE_MEMBER(Widget, secret_, &w);
+    EXPECT_EQ(secret, 999);
+
+    printf("factor=%d, secret=%d\n", factor, secret);
+}
+```
+
+**多文件支持:**
+`TEST_FRIEND`和`TEST_G_FRIEND`在多个.cpp文件中定义测试并链接到同一可执行文件时正确工作，就像常规`TEST_G`一样。有关示例，请参见`test_friend_multi_file1.cpp`和`test_friend_multi_file2.cpp`。
+
 ## 数组比较宏
 
 该库提供了方便的宏，用于逐元素比较数组并提供详细的错误消息。这些宏构建在Google Test的断言宏之上。

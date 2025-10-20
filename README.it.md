@@ -20,10 +20,11 @@ class MyTest : public ::gtest_generator::TestWithGenerator {
 
 // Scrivere test parametrizzato usando la macro TEST_G
 TEST_G(MyTest, SimpleCase) {
-    // IMPORTANTE: Tutte le chiamate GENERATOR() devono venire PRIMA di USE_GENERATOR()
+    // ⚠️ CRITICO: Le chiamate GENERATOR() DEVONO essere IN CIMA, PRIMA di USE_GENERATOR()
+    // Questo ordine è obbligatorio - la libreria conta i generatori prima di eseguire il test
     int a = GENERATOR(1, 2);      // Sarà 1 o 2
     int b = GENERATOR(10, 20);    // Sarà 10 o 20
-    USE_GENERATOR();              // Deve essere chiamato DOPO tutte le chiamate GENERATOR()
+    USE_GENERATOR();              // DEVE essere chiamato DOPO tutte le chiamate GENERATOR()
 
     EXPECT_LT(a, b);
     printf("Test: a=%d, b=%d\n", a, b);
@@ -286,27 +287,47 @@ La libreria usa variabili statiche thread-local per mantenere lo stato del gener
 
 ## Note Importanti sull'Uso
 
-### L'Ordine Corretto è Critico
+### ⚠️ CRITICO: Ordine di GENERATOR e USE_GENERATOR
+
+**MOLTO IMPORTANTE:** Tutte le chiamate `GENERATOR()` **DEVONO** essere **IN CIMA** al caso di test, **PRIMA** di `USE_GENERATOR()`. Questo ordine è obbligatorio per il corretto funzionamento della libreria.
 
 ✅ **CORRETTO**:
 ```cpp
 TEST_G(MyTest, Example) {
-    int a = GENERATOR(1, 2);     // Prima: Definire i generatori
-    int b = GENERATOR(10, 20);   // 
-    USE_GENERATOR();             // Poi: Chiamare USE_GENERATOR()
-    // Logica del test qui
+    // Passo 1: TUTTE le chiamate GENERATOR() per prime IN CIMA
+    int a = GENERATOR(1, 2);
+    int b = GENERATOR(10, 20);
+
+    // Passo 2: USE_GENERATOR() DOPO tutti i generatori
+    USE_GENERATOR();
+
+    // Passo 3: La tua logica di test qui
+    EXPECT_LT(a, b);
 }
 ```
 
-❌ **SBAGLIATO**:
+❌ **SBAGLIATO - NON funzionerà**:
 ```cpp
 TEST_G(MyTest, Example) {
-    USE_GENERATOR();             // Sbagliato! Questo deve venire dopo le chiamate GENERATOR
-    int a = GENERATOR(1, 2);     
-    int b = GENERATOR(10, 20);   
-    // Logica del test qui
+    USE_GENERATOR();             // ❌ SBAGLIATO! Deve venire dopo i generatori
+    int a = GENERATOR(1, 2);     // ❌ Troppo tardi!
+    int b = GENERATOR(10, 20);
 }
 ```
+
+❌ **SBAGLIATO - NON funzionerà**:
+```cpp
+TEST_G(MyTest, Example) {
+    int a = GENERATOR(1, 2);
+    USE_GENERATOR();             // ❌ SBAGLIATO! Deve venire dopo TUTTI i generatori
+    int b = GENERATOR(10, 20);   // ❌ Questo generatore è dopo USE_GENERATOR()
+}
+```
+
+**Perché questo è importante:**
+- La libreria conta i generatori durante una fase di pre-esecuzione
+- `USE_GENERATOR()` segna la fine della fase di dichiarazione dei generatori
+- I generatori dichiarati dopo `USE_GENERATOR()` saranno ignorati o causeranno errori
 
 ## Output di Esempio
 
@@ -534,6 +555,64 @@ Evita di usare quando:
 - Creerebbe un accoppiamento stretto tra test e implementazione
 
 Vedere `test_friend_access.cpp` per esempi completi.
+
+### Macro TEST_FRIEND e TEST_G_FRIEND
+
+La libreria fornisce macro `TEST_FRIEND` e `TEST_G_FRIEND` che creano infrastruttura di test con supporto integrato per il pattern VirtualAccessor. Queste macro funzionano perfettamente con la dichiarazione `GTESTG_FRIEND_ACCESS_PRIVATE()`.
+
+**Punti Chiave:**
+- `GTESTG_FRIEND_ACCESS_PRIVATE()` concede accesso friend per **entrambi** gli approcci basati su classi (VirtualAccessor) e basati su funzioni (gtestg_private_accessMember)
+- Usa `TEST_FRIEND` per test regolari in stile TEST_F
+- Usa `TEST_G_FRIEND` per test parametrizzati basati su generatori
+- Continua a usare macro `GTESTG_PRIVATE_MEMBER` per accedere ai membri privati
+
+**Esempio con TEST_FRIEND:**
+```cpp
+class Widget {
+private:
+    int secret_ = 42;
+public:
+    Widget() = default;
+
+    // Una singola macro concede entrambi i tipi di accesso friend
+    GTESTG_FRIEND_ACCESS_PRIVATE();
+};
+
+// Dichiarare l'accessor
+GTESTG_PRIVATE_DECLARE_MEMBER(Widget, secret_);
+
+struct WidgetTest : ::testing::Test {
+    Widget w;
+};
+
+TEST_FRIEND(WidgetTest, AccessPrivate) {
+    // Accedere al membro privato usando l'accessor basato su funzioni
+    int& secret = GTESTG_PRIVATE_MEMBER(Widget, secret_, &w);
+    EXPECT_EQ(secret, 42);
+    secret = 100;
+    EXPECT_EQ(secret, 100);
+}
+```
+
+**Esempio con TEST_G_FRIEND:**
+```cpp
+struct WidgetGenTest : ::gtest_generator::TestWithGenerator {
+    Widget w{999};
+};
+
+TEST_G_FRIEND(WidgetGenTest, GeneratorTest) {
+    int factor = GENERATOR(1, 2, 5);
+    USE_GENERATOR();
+
+    int& secret = GTESTG_PRIVATE_MEMBER(Widget, secret_, &w);
+    EXPECT_EQ(secret, 999);
+
+    printf("factor=%d, secret=%d\n", factor, secret);
+}
+```
+
+**Supporto Multi-File:**
+`TEST_FRIEND` e `TEST_G_FRIEND` funzionano correttamente quando i test sono definiti in più file .cpp collegati allo stesso eseguibile, proprio come `TEST_G` regolare. Vedere `test_friend_multi_file1.cpp` e `test_friend_multi_file2.cpp` per esempi.
 
 ## Macro di Confronto Array
 

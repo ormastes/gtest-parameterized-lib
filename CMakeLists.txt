@@ -44,6 +44,13 @@ target_link_libraries(test_aligned_counting PRIVATE gtest gtest_main pthread)
 add_executable(test_friend_access test_friend_access.cpp)
 target_link_libraries(test_friend_access PRIVATE gtest gtest_main pthread)
 
+add_executable(test_class_friend_access test_class_friend_access.cpp)
+target_link_libraries(test_class_friend_access PRIVATE gtest gtest_main pthread)
+
 # Multi-cpp executable to test when library is used in multiple files
 add_executable(multi_test mygen_test.cpp additional_test.cpp)
 target_link_libraries(multi_test PRIVATE gtest gtest_main pthread)
+
+# Multi-cpp executable to test TEST_FRIEND and TEST_G_FRIEND across files
+add_executable(multi_friend_test test_friend_multi_file1.cpp test_friend_multi_file2.cpp)
+target_link_libraries(multi_friend_test PRIVATE gtest gtest_main pthread)

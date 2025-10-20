@@ -12,9 +12,9 @@
 #ifndef GTESTG_FRIEND_INFRA_INCLUDED
 #define GTESTG_FRIEND_INFRA_INCLUDED
 
+// Approach 1: Direct friend declaration (simple, explicit per-test)
 // Macro to place inside target class to grant friend access to specific test
 // Usage: GTESTG_FRIEND_TEST(TestSuite, TestName)
-// This grants friend access to the specific test
 #define GTESTG_FRIEND_TEST(Suite, TestName) \
     friend class Suite##_##TestName##_Test
 
@@ -28,20 +28,56 @@
 #define GTESTG_FRIEND_TEST_SUITE(Suite) \
     friend struct Suite
 
-// Convenience macro - to be placed in target class when you want multiple tests to have access
-// This version requires you to list each test that needs access
-#define GTESTG_FRIEND_TEST_ACCESS_PRIVATE(...) \
-    /* This macro is a placeholder - use GTESTG_FRIEND_TEST or GTESTG_FRIEND_TEST_SUITE instead */
+// Approach 2: VirtualAccessor template (universal, works with TEST_FRIEND/TEST_G_FRIEND)
+namespace gtestg_detail {
+template <class Suite, class Tag>
+class VirtualAccessor : public Suite {};
+}
 
-// TEST_FRIEND is just regular TEST_F when using the direct friend approach
-// The target class must have GTESTG_FRIEND_TEST(Suite, TestName) for this to work
-#define TEST_FRIEND(Suite, TestName) \
-    TEST_F(Suite, TestName)
+// Token concat helper
+#ifndef GTESTG_CONCAT
+#  define GTESTG_CONCAT_INNER(a, b) a##b
+#  define GTESTG_CONCAT(a, b) GTESTG_CONCAT_INNER(a, b)
+#endif
 
-// TEST_G_FRIEND for generator tests with friend access
-// The target class must have GTESTG_FRIEND_TEST_G(TestClassName, TestName) for this to work
-#define TEST_G_FRIEND(TestClassName, TestName) \
-    TEST_G(TestClassName, TestName)
+// Unified macro that grants friend access for ALL approaches:
+// - Direct friend (GTESTG_FRIEND_TEST - not needed but compatible)
+// - VirtualAccessor template (for TEST_FRIEND, TEST_G_FRIEND)
+// - Function-based (gtestg_private_accessMember for GTESTG_PRIVATE_MEMBER macros)
+#define GTESTG_FRIEND_ACCESS_PRIVATE() \
+  template <class, class> friend class ::gtestg_detail::VirtualAccessor; \
+  template <typename _ID, typename _TC, typename _TG> \
+  friend auto ::gtestg_private_accessMember(_TC*, _TG*) -> decltype(auto)
+
+// TEST_F style: friend-aware test that derives from a VirtualAccessor.
+#define TEST_FRIEND(Suite, TestName)                                                 \
+  struct TestName##_Tag;                                                             \
+  class Suite##_##TestName##_Friend                                                  \
+      : public ::gtestg_detail::VirtualAccessor<Suite, TestName##_Tag> {};           \
+  TEST_F(Suite##_##TestName##_Friend, TestName)
+
+// TEST_G style (parameterized via your generator): friend-aware variant.
+#define TEST_G_FRIEND(TestClassName, TestName)                                              \
+  class TestClassName##__##TestName : public TestClassName {};                              \
+  struct TestName##_Tag;                                                                    \
+  class TestClassName##__##TestName##__Friend                                               \
+      : public ::gtestg_detail::VirtualAccessor<                                            \
+            TestClassName##__##TestName, TestName##_Tag> {};                                \
+  /* Forward-declare the gtest internal test class for this accessor suite */               \
+  class GTEST_TEST_CLASS_NAME_(TestClassName##__##TestName##__Friend, __);                  \
+  /* Generator hook uses the accessor test class so TestBody() runs with access */          \
+  inline ::gtest_generator::DynamicRangeGenerator*                                          \
+  __gtest_generator__get_generator_##TestClassName##TestName##Friend() {                    \
+    return ::gtest_generator::CreateGenerator<                                              \
+        GTEST_TEST_CLASS_NAME_(TestClassName##__##TestName##__Friend, __)>(                 \
+        #TestClassName "." #TestName);                                                      \
+  }                                                                                         \
+  INSTANTIATE_TEST_SUITE_P(                                                                 \
+      Generator,                                                                            \
+      TestClassName##__##TestName##__Friend,                                                \
+      ::testing::internal::ParamGenerator<int>(                                             \
+          __gtest_generator__get_generator_##TestClassName##TestName##Friend()));           \
+  TEST_P(TestClassName##__##TestName##__Friend, __)
 
 #endif // GTESTG_FRIEND_INFRA_INCLUDED
 // ============================================================================

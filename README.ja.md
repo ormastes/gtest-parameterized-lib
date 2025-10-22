@@ -556,41 +556,49 @@ TEST_FRIEND(DerivedTest, AccessBoth) {
 
 完全な例については`test_friend_access.cpp`を参照してください。
 
-### TEST_FRIENDおよびTEST_G_FRIENDマクロ
+### 統合プライベートメンバーアクセスシステム
 
-ライブラリは、VirtualAccessorパターンの組み込みサポートを備えたテストインフラストラクチャを作成する`TEST_FRIEND`および`TEST_G_FRIEND`マクロを提供します。これらのマクロは`GTESTG_FRIEND_ACCESS_PRIVATE()`宣言とシームレスに連携します。
+ライブラリは、テストでprivateおよびprotectedメンバーにアクセスするための統合システムを提供します。クラスに単一のマクロ`GTESTG_FRIEND_ACCESS_PRIVATE()`を追加することで、プライベートメンバーアクセスのための**2つの相補的なアプローチ**が有効になります:
 
-**重要なポイント:**
-- `GTESTG_FRIEND_ACCESS_PRIVATE()`は、クラスベース(VirtualAccessor)と関数ベース(gtestg_private_accessMember)アプローチの**両方**にfriendアクセスを許可します
-- 通常のTEST_Fスタイルのテストには`TEST_FRIEND`を使用します
-- ジェネレーターベースのパラメータ化テストには`TEST_G_FRIEND`を使用します
-- プライベートメンバーにアクセスするには、`GTESTG_PRIVATE_MEMBER`マクロを引き続き使用します
+1. **TEST_FRIEND/TEST_G_FRIENDによる直接アクセス** - ほとんどの場合に推奨
+2. **GTESTG_PRIVATE_MEMBERマクロによる関数ベースアクセス** - より明示的な制御のため
+
+両方のアプローチはシームレスに連携し、同じテストで使用できます。
+
+#### コア: GTESTG_FRIEND_ACCESS_PRIVATE()
+
+この単一のマクロをクラスに追加して、プライベートメンバーアクセスを有効にします:
+
+```cpp
+class MyClass {
+private:
+    int privateValue = 42;
+    std::string privateName = "secret";
+public:
+    // 1つのマクロで2つのアクセスアプローチを有効化
+    GTESTG_FRIEND_ACCESS_PRIVATE();
+};
+```
+
+このマクロは以下へのfriendアクセスを許可します:
+- **VirtualAccessorテンプレート** - TEST_FRIENDおよびTEST_G_FRIENDで使用
+- **gtestg_private_accessMember関数** - GTESTG_PRIVATE_MEMBERマクロで使用
+
+#### アプローチ1: TEST_FRIENDとTEST_G_FRIENDの使用（推奨）
+
+シンプルな場合は、`TEST_FRIEND`または`TEST_G_FRIEND`を使用してプライベートメンバーに直接アクセスできるテストを作成します:
 
 **TEST_FRIENDの例:**
 ```cpp
-class Widget {
-private:
-    int secret_ = 42;
-public:
-    Widget() = default;
-
-    // 単一のマクロで両方のタイプのfriendアクセスを許可
-    GTESTG_FRIEND_ACCESS_PRIVATE();
-};
-
-// アクセサを宣言
-GTESTG_PRIVATE_DECLARE_MEMBER(Widget, secret_);
-
 struct WidgetTest : ::testing::Test {
     Widget w;
 };
 
 TEST_FRIEND(WidgetTest, AccessPrivate) {
-    // 関数ベースのアクセサを使用してプライベートメンバーにアクセス
-    int& secret = GTESTG_PRIVATE_MEMBER(Widget, secret_, &w);
-    EXPECT_EQ(secret, 42);
-    secret = 100;
-    EXPECT_EQ(secret, 100);
+    // プライベートメンバーへの直接アクセス（VirtualAccessor継承を介して）
+    EXPECT_EQ(w.secret_, 42);
+    w.secret_ = 100;
+    EXPECT_EQ(w.secret_, 100);
 }
 ```
 
@@ -604,15 +612,199 @@ TEST_G_FRIEND(WidgetGenTest, GeneratorTest) {
     int factor = GENERATOR(1, 2, 5);
     USE_GENERATOR();
 
-    int& secret = GTESTG_PRIVATE_MEMBER(Widget, secret_, &w);
-    EXPECT_EQ(secret, 999);
-
-    printf("factor=%d, secret=%d\n", factor, secret);
+    // パラメータ化テストでも直接アクセス可能
+    EXPECT_EQ(w.secret_, 999);
+    printf("factor=%d, secret=%d\n", factor, w.secret_);
 }
 ```
 
 **マルチファイルサポート:**
-`TEST_FRIEND`および`TEST_G_FRIEND`は、通常の`TEST_G`と同様に、同じ実行可能ファイルにリンクされた複数の.cppファイルでテストが定義されている場合に正しく動作します。例については`test_friend_multi_file1.cpp`および`test_friend_multi_file2.cpp`を参照してください。
+`TEST_FRIEND`および`TEST_G_FRIEND`は、同じ実行可能ファイルにリンクされた複数の.cppファイルでテストが定義されている場合に正しく動作します。例については`test_friend_multi_file1.cpp`および`test_friend_multi_file2.cpp`を参照してください。
+
+#### アプローチ2: GTESTG_PRIVATE_MEMBERマクロの使用（明示的制御）
+
+より多くの制御が必要な場合、または通常の`TEST_F`/`TEST_G`マクロを使用する場合は、関数ベースのアクセサマクロを使用します。このアプローチでは、アクセスしたい各メンバーの宣言が必要です。
+
+**ステップ1: クラス外部でアクセスを宣言（テストファイル内）:**
+```cpp
+// アクセスしたいメンバーを宣言
+GTESTG_PRIVATE_DECLARE_MEMBER(Widget, secret_);
+GTESTG_PRIVATE_DECLARE_MEMBER(Widget, privateName);
+```
+
+**ステップ2: テストでメンバーにアクセス:**
+```cpp
+TEST_FRIEND(WidgetTest, AccessPrivate) {
+    // マクロを使用してアクセス
+    int& secret = GTESTG_PRIVATE_MEMBER(Widget, secret_, &w);
+    EXPECT_EQ(secret, 42);
+    secret = 100;
+    EXPECT_EQ(secret, 100);
+}
+```
+
+このアプローチが有用な場合:
+- アクセスされるメンバーの明示的なドキュメント化が必要な場合
+- 静的メンバーにアクセスする必要がある場合
+- 追加ロジックを持つカスタムアクセサ関数が必要な場合
+
+#### 両方のアプローチの組み合わせ
+
+同じテストで両方のアプローチを使用できます:
+
+```cpp
+class Widget {
+private:
+    int secret_ = 42;
+    static int counter_;
+public:
+    GTESTG_FRIEND_ACCESS_PRIVATE();  // 両方のアプローチを有効化
+};
+
+int Widget::counter_ = 0;
+
+// 静的メンバーへのアクセスを宣言
+GTESTG_PRIVATE_DECLARE_STATIC(Widget, counter_);
+
+TEST_G_FRIEND(WidgetTest, CombinedAccess) {
+    int value = GENERATOR(10, 20);
+    USE_GENERATOR();
+
+    Widget w;
+
+    // アプローチ1: インスタンスメンバーへの直接アクセス
+    w.secret_ = value;
+    EXPECT_EQ(w.secret_, value);
+
+    // アプローチ2: 静的メンバーにマクロを使用
+    int& count = GTESTG_PRIVATE_STATIC(Widget, counter_);
+    count++;
+}
+```
+
+### GTESTG_PRIVATE_MEMBERマクロの完全なAPIリファレンス
+
+このセクションは、関数ベースのプライベートメンバーアクセスマクロ（アプローチ2）の詳細なリファレンスを提供します。
+
+#### メンバーへのアクセス宣言
+
+これらの宣言をクラスの**外部**、通常はテストファイルに配置します。これらの宣言は、アクセスしたいプライベートメンバーをシステムに伝えます:
+
+| マクロ | 用途 | パラメータ | 例 |
+|-------|------|----------|-----|
+| `GTESTG_PRIVATE_DECLARE_MEMBER` | インスタンスメンバーへのアクセスを宣言 | Target, MemberName | `GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateField)` |
+| `GTESTG_PRIVATE_DECLARE_STATIC` | 静的メンバーへのアクセスを宣言 | Target, MemberName | `GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter)` |
+| `GTESTG_PRIVATE_DECLARE_FUNCTION` | カスタムアクセサ関数を宣言 | ThisClass, Target, FuncName | `GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum)` |
+
+#### メンバーアクセスマクロ
+
+テスト関数の**内部**でこれらのマクロを使用してプライベートメンバーにアクセスします:
+
+| マクロ | 用途 | パラメータ | 例 |
+|-------|------|----------|-----|
+| `GTESTG_PRIVATE_MEMBER` | インスタンスメンバーへアクセス | Target, MemberName, &obj | `GTESTG_PRIVATE_MEMBER(MyClass, privateField, &obj)` |
+| `GTESTG_PRIVATE_STATIC` | 静的メンバーへアクセス | Target, MemberName | `GTESTG_PRIVATE_STATIC(MyClass, staticCounter)` |
+| `GTESTG_PRIVATE_CALL` | 明示的なテストオブジェクトでカスタム関数を呼び出し | Target, FuncName, test_obj, &obj | `GTESTG_PRIVATE_CALL(MyClass, GetSum, this, &obj)` |
+| `GTESTG_PRIVATE_CALL_ON_TEST` | カスタム関数を呼び出し（暗黙の'this'を使用） | ThisClass, Target, FuncName, &obj | `GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj)` |
+
+#### 詳細な使用例
+
+以下の例は、GTESTG_PRIVATE_*マクロの包括的な使用パターンを示します。
+
+**例1: インスタンスメンバーへのアクセス**
+```cpp
+class MyClass {
+private:
+    int privateValue = 42;
+    std::string privateName = "secret";
+public:
+    GTESTG_FRIEND_ACCESS_PRIVATE();
+};
+
+// アクセスを宣言（テストファイル内）
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateValue);
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateName);
+
+TEST_G(MyTest, AccessPrivate) {
+    int value = GENERATOR(10, 20, 30);
+    USE_GENERATOR();
+
+    MyClass obj;
+
+    // プライベートメンバーへアクセスして変更
+    int& val = GTESTG_PRIVATE_MEMBER(MyClass, privateValue, &obj);
+    EXPECT_EQ(val, 42);
+    val = value;  // 変更可能
+    EXPECT_EQ(val, value);
+
+    std::string& name = GTESTG_PRIVATE_MEMBER(MyClass, privateName, &obj);
+    EXPECT_EQ(name, "secret");
+    name = "modified";
+}
+```
+
+**例2: 静的メンバーへのアクセス**
+```cpp
+class MyClass {
+private:
+    static int staticCounter;
+public:
+    GTESTG_FRIEND_ACCESS_PRIVATE();
+};
+
+int MyClass::staticCounter = 100;
+
+// 静的メンバーへのアクセスを宣言
+GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter);
+
+TEST_G(MyTest, AccessStatic) {
+    USE_GENERATOR();
+
+    // 静的メンバーへアクセス（オブジェクト不要）
+    int& count = GTESTG_PRIVATE_STATIC(MyClass, staticCounter);
+    EXPECT_EQ(count, 100);
+    count = 200;  // 変更可能
+    EXPECT_EQ(count, 200);
+}
+```
+
+**例3: カスタムアクセサ関数**
+```cpp
+class MyClass {
+private:
+    int field1 = 10;
+    int field2 = 20;
+public:
+    GTESTG_FRIEND_ACCESS_PRIVATE();
+};
+
+class MyTest : public ::gtest_generator::TestWithGenerator {};
+
+// テストコンテキストとプライベートメンバーの両方にアクセスするカスタム関数を宣言
+// THIS = テストオブジェクト、TARGET = アクセスされるオブジェクト
+GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum) {
+    // テストコンテキストへアクセス: THIS->GetParam()
+    // プライベートメンバーへアクセス: TARGET->field1, TARGET->field2
+    return TARGET->field1 + TARGET->field2;
+}
+
+TEST_G(MyTest, CustomFunction) {
+    int multiplier = GENERATOR(1, 2, 3);
+    USE_GENERATOR();
+
+    MyClass obj;
+
+    // CALL_ON_TESTを使用してカスタム関数を呼び出し（暗黙の'this'を使用）
+    int sum = GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj);
+    EXPECT_EQ(sum, 30);  // 10 + 20
+
+    // 代替: テストオブジェクトを明示的に渡す
+    int sum2 = GTESTG_PRIVATE_CALL(MyClass, GetSum, static_cast<MyTest*>(this), &obj);
+    EXPECT_EQ(sum2, 30);
+}
+```
+
+完全な例については、`test_private_access.cpp`および`test_define_macros.cpp`を参照してください。
 
 ## 配列比較マクロ
 

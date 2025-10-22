@@ -556,41 +556,49 @@ TEST_FRIEND(DerivedTest, AccessBoth) {
 
 전체 예제는 `test_friend_access.cpp`를 참조하세요.
 
-### TEST_FRIEND 및 TEST_G_FRIEND 매크로
+### 통합 Private 멤버 액세스 시스템
 
-라이브러리는 VirtualAccessor 패턴에 대한 내장 지원과 함께 테스트 인프라를 생성하는 `TEST_FRIEND` 및 `TEST_G_FRIEND` 매크로를 제공합니다. 이러한 매크로는 `GTESTG_FRIEND_ACCESS_PRIVATE()` 선언과 원활하게 작동합니다.
+라이브러리는 테스트에서 private 및 protected 멤버에 액세스하기 위한 통합 시스템을 제공합니다. 클래스에 단일 매크로 `GTESTG_FRIEND_ACCESS_PRIVATE()`를 추가하면 private 멤버 액세스를 위한 **두 가지 상호 보완적인 접근 방식**이 활성화됩니다:
 
-**주요 사항:**
-- `GTESTG_FRIEND_ACCESS_PRIVATE()`는 클래스 기반(VirtualAccessor)과 함수 기반(gtestg_private_accessMember) 접근 방식 **모두**에 대한 friend 액세스를 부여합니다
-- 일반 TEST_F 스타일 테스트에는 `TEST_FRIEND`를 사용하세요
-- 생성기 기반 매개변수화 테스트에는 `TEST_G_FRIEND`를 사용하세요
-- private 멤버에 액세스하려면 `GTESTG_PRIVATE_MEMBER` 매크로를 계속 사용하세요
+1. **TEST_FRIEND/TEST_G_FRIEND를 통한 직접 액세스** - 대부분의 경우 권장
+2. **GTESTG_PRIVATE_MEMBER 매크로를 통한 함수 기반 액세스** - 더 명시적인 제어를 위해
+
+두 접근 방식은 원활하게 함께 작동하며 동일한 테스트에서 사용할 수 있습니다.
+
+#### 핵심: GTESTG_FRIEND_ACCESS_PRIVATE()
+
+클래스에 이 단일 매크로를 추가하여 private 멤버 액세스를 활성화합니다:
+
+```cpp
+class MyClass {
+private:
+    int privateValue = 42;
+    std::string privateName = "secret";
+public:
+    // 하나의 매크로로 두 가지 액세스 접근 방식을 활성화
+    GTESTG_FRIEND_ACCESS_PRIVATE();
+};
+```
+
+이 매크로는 다음에 대한 friend 액세스를 부여합니다:
+- **VirtualAccessor 템플릿** - TEST_FRIEND 및 TEST_G_FRIEND에서 사용
+- **gtestg_private_accessMember 함수** - GTESTG_PRIVATE_MEMBER 매크로에서 사용
+
+#### 접근 방식 1: TEST_FRIEND 및 TEST_G_FRIEND 사용 (권장)
+
+간단한 경우 `TEST_FRIEND` 또는 `TEST_G_FRIEND`를 사용하여 private 멤버에 직접 액세스할 수 있는 테스트를 생성합니다:
 
 **TEST_FRIEND 예제:**
 ```cpp
-class Widget {
-private:
-    int secret_ = 42;
-public:
-    Widget() = default;
-
-    // 단일 매크로로 두 가지 유형의 friend 액세스를 부여합니다
-    GTESTG_FRIEND_ACCESS_PRIVATE();
-};
-
-// 액세서 선언
-GTESTG_PRIVATE_DECLARE_MEMBER(Widget, secret_);
-
 struct WidgetTest : ::testing::Test {
     Widget w;
 };
 
 TEST_FRIEND(WidgetTest, AccessPrivate) {
-    // 함수 기반 액세서를 사용하여 private 멤버에 액세스
-    int& secret = GTESTG_PRIVATE_MEMBER(Widget, secret_, &w);
-    EXPECT_EQ(secret, 42);
-    secret = 100;
-    EXPECT_EQ(secret, 100);
+    // private 멤버에 직접 액세스 (VirtualAccessor 상속을 통해)
+    EXPECT_EQ(w.secret_, 42);
+    w.secret_ = 100;
+    EXPECT_EQ(w.secret_, 100);
 }
 ```
 
@@ -604,15 +612,199 @@ TEST_G_FRIEND(WidgetGenTest, GeneratorTest) {
     int factor = GENERATOR(1, 2, 5);
     USE_GENERATOR();
 
-    int& secret = GTESTG_PRIVATE_MEMBER(Widget, secret_, &w);
-    EXPECT_EQ(secret, 999);
-
-    printf("factor=%d, secret=%d\n", factor, secret);
+    // 파라미터화된 테스트에서도 직접 액세스 가능
+    EXPECT_EQ(w.secret_, 999);
+    printf("factor=%d, secret=%d\n", factor, w.secret_);
 }
 ```
 
 **다중 파일 지원:**
-`TEST_FRIEND` 및 `TEST_G_FRIEND`는 일반 `TEST_G`와 마찬가지로 동일한 실행 파일에 링크된 여러 .cpp 파일에서 테스트가 정의된 경우에도 올바르게 작동합니다. 예제는 `test_friend_multi_file1.cpp` 및 `test_friend_multi_file2.cpp`를 참조하세요.
+`TEST_FRIEND` 및 `TEST_G_FRIEND`는 동일한 실행 파일에 링크된 여러 .cpp 파일에서 테스트가 정의된 경우에도 올바르게 작동합니다. 예제는 `test_friend_multi_file1.cpp` 및 `test_friend_multi_file2.cpp`를 참조하세요.
+
+#### 접근 방식 2: GTESTG_PRIVATE_MEMBER 매크로 사용 (명시적 제어)
+
+더 많은 제어가 필요하거나 일반 `TEST_F`/`TEST_G` 매크로를 사용할 때는 함수 기반 액세서 매크로를 사용합니다. 이 접근 방식은 액세스하려는 각 멤버에 대한 선언이 필요합니다.
+
+**1단계: 클래스 외부에 액세스 선언 (테스트 파일에서):**
+```cpp
+// 액세스하려는 멤버 선언
+GTESTG_PRIVATE_DECLARE_MEMBER(Widget, secret_);
+GTESTG_PRIVATE_DECLARE_MEMBER(Widget, privateName);
+```
+
+**2단계: 테스트에서 멤버에 액세스:**
+```cpp
+TEST_FRIEND(WidgetTest, AccessPrivate) {
+    // 매크로를 사용하여 액세스
+    int& secret = GTESTG_PRIVATE_MEMBER(Widget, secret_, &w);
+    EXPECT_EQ(secret, 42);
+    secret = 100;
+    EXPECT_EQ(secret, 100);
+}
+```
+
+이 접근 방식은 다음과 같은 경우에 유용합니다:
+- 액세스되는 멤버에 대한 명시적 문서화가 필요한 경우
+- 정적 멤버에 액세스해야 하는 경우
+- 추가 로직이 있는 사용자 정의 액세서 함수가 필요한 경우
+
+#### 두 접근 방식 결합
+
+동일한 테스트에서 두 접근 방식을 모두 사용할 수 있습니다:
+
+```cpp
+class Widget {
+private:
+    int secret_ = 42;
+    static int counter_;
+public:
+    GTESTG_FRIEND_ACCESS_PRIVATE();  // 두 접근 방식 모두 활성화
+};
+
+int Widget::counter_ = 0;
+
+// 정적 멤버에 대한 액세스 선언
+GTESTG_PRIVATE_DECLARE_STATIC(Widget, counter_);
+
+TEST_G_FRIEND(WidgetTest, CombinedAccess) {
+    int value = GENERATOR(10, 20);
+    USE_GENERATOR();
+
+    Widget w;
+
+    // 접근 방식 1: 인스턴스 멤버에 직접 액세스
+    w.secret_ = value;
+    EXPECT_EQ(w.secret_, value);
+
+    // 접근 방식 2: 정적 멤버에 매크로 사용
+    int& count = GTESTG_PRIVATE_STATIC(Widget, counter_);
+    count++;
+}
+```
+
+### GTESTG_PRIVATE_MEMBER 매크로 완전 API 참조
+
+이 섹션은 함수 기반 private 멤버 액세스 매크로(접근 방식 2)에 대한 상세한 참조를 제공합니다.
+
+#### 멤버에 대한 액세스 선언
+
+클래스 **외부**에, 일반적으로 테스트 파일에 이러한 선언을 배치합니다. 이 선언은 액세스하려는 private 멤버를 시스템에 알려줍니다:
+
+| 매크로 | 용도 | 매개변수 | 예제 |
+|-------|------|---------|------|
+| `GTESTG_PRIVATE_DECLARE_MEMBER` | 인스턴스 멤버 액세스 선언 | Target, MemberName | `GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateField)` |
+| `GTESTG_PRIVATE_DECLARE_STATIC` | 정적 멤버 액세스 선언 | Target, MemberName | `GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter)` |
+| `GTESTG_PRIVATE_DECLARE_FUNCTION` | 사용자 정의 액세서 함수 선언 | ThisClass, Target, FuncName | `GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum)` |
+
+#### 멤버 액세스 매크로
+
+테스트 함수 **내부**에서 이러한 매크로를 사용하여 private 멤버에 액세스합니다:
+
+| 매크로 | 용도 | 매개변수 | 예제 |
+|-------|------|---------|------|
+| `GTESTG_PRIVATE_MEMBER` | 인스턴스 멤버 액세스 | Target, MemberName, &obj | `GTESTG_PRIVATE_MEMBER(MyClass, privateField, &obj)` |
+| `GTESTG_PRIVATE_STATIC` | 정적 멤버 액세스 | Target, MemberName | `GTESTG_PRIVATE_STATIC(MyClass, staticCounter)` |
+| `GTESTG_PRIVATE_CALL` | 명시적 테스트 객체로 사용자 정의 함수 호출 | Target, FuncName, test_obj, &obj | `GTESTG_PRIVATE_CALL(MyClass, GetSum, this, &obj)` |
+| `GTESTG_PRIVATE_CALL_ON_TEST` | 사용자 정의 함수 호출 (암시적 'this' 사용) | ThisClass, Target, FuncName, &obj | `GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj)` |
+
+#### 상세 사용 예제
+
+다음 예제는 GTESTG_PRIVATE_* 매크로의 포괄적인 사용 패턴을 보여줍니다.
+
+**예제 1: 인스턴스 멤버 액세스**
+```cpp
+class MyClass {
+private:
+    int privateValue = 42;
+    std::string privateName = "secret";
+public:
+    GTESTG_FRIEND_ACCESS_PRIVATE();
+};
+
+// 액세스 선언 (테스트 파일에서)
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateValue);
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateName);
+
+TEST_G(MyTest, AccessPrivate) {
+    int value = GENERATOR(10, 20, 30);
+    USE_GENERATOR();
+
+    MyClass obj;
+
+    // private 멤버 액세스 및 수정
+    int& val = GTESTG_PRIVATE_MEMBER(MyClass, privateValue, &obj);
+    EXPECT_EQ(val, 42);
+    val = value;  // 수정 가능
+    EXPECT_EQ(val, value);
+
+    std::string& name = GTESTG_PRIVATE_MEMBER(MyClass, privateName, &obj);
+    EXPECT_EQ(name, "secret");
+    name = "modified";
+}
+```
+
+**예제 2: 정적 멤버 액세스**
+```cpp
+class MyClass {
+private:
+    static int staticCounter;
+public:
+    GTESTG_FRIEND_ACCESS_PRIVATE();
+};
+
+int MyClass::staticCounter = 100;
+
+// 정적 멤버 액세스 선언
+GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter);
+
+TEST_G(MyTest, AccessStatic) {
+    USE_GENERATOR();
+
+    // 정적 멤버 액세스 (객체 필요 없음)
+    int& count = GTESTG_PRIVATE_STATIC(MyClass, staticCounter);
+    EXPECT_EQ(count, 100);
+    count = 200;  // 수정 가능
+    EXPECT_EQ(count, 200);
+}
+```
+
+**예제 3: 사용자 정의 액세서 함수**
+```cpp
+class MyClass {
+private:
+    int field1 = 10;
+    int field2 = 20;
+public:
+    GTESTG_FRIEND_ACCESS_PRIVATE();
+};
+
+class MyTest : public ::gtest_generator::TestWithGenerator {};
+
+// 테스트 컨텍스트와 private 멤버 모두에 액세스하는 사용자 정의 함수 선언
+// THIS = 테스트 객체, TARGET = 액세스되는 객체
+GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum) {
+    // 테스트 컨텍스트 액세스: THIS->GetParam()
+    // private 멤버 액세스: TARGET->field1, TARGET->field2
+    return TARGET->field1 + TARGET->field2;
+}
+
+TEST_G(MyTest, CustomFunction) {
+    int multiplier = GENERATOR(1, 2, 3);
+    USE_GENERATOR();
+
+    MyClass obj;
+
+    // CALL_ON_TEST를 사용한 사용자 정의 함수 호출 (암시적 'this' 사용)
+    int sum = GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj);
+    EXPECT_EQ(sum, 30);  // 10 + 20
+
+    // 대안: 테스트 객체를 명시적으로 전달
+    int sum2 = GTESTG_PRIVATE_CALL(MyClass, GetSum, static_cast<MyTest*>(this), &obj);
+    EXPECT_EQ(sum2, 30);
+}
+```
+
+전체 예제는 `test_private_access.cpp` 및 `test_define_macros.cpp`를 참조하세요.
 
 ## 배열 비교 매크로
 

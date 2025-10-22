@@ -742,41 +742,49 @@ Avoid using when:
 
 See `test_friend_access.cpp` for complete examples.
 
-### TEST_FRIEND and TEST_G_FRIEND Macros
+### Unified Private Member Access System
 
-The library provides `TEST_FRIEND` and `TEST_G_FRIEND` macros that create test infrastructure with built-in support for the VirtualAccessor pattern. These macros work seamlessly with the `GTESTG_FRIEND_ACCESS_PRIVATE()` declaration.
+The library provides a unified system for accessing private and protected members in your tests. By adding a single macro `GTESTG_FRIEND_ACCESS_PRIVATE()` to your class, you enable **two complementary approaches** for private member access:
 
-**Key Points:**
-- `GTESTG_FRIEND_ACCESS_PRIVATE()` grants friend access for **both** class-based (VirtualAccessor) and function-based (gtestg_private_accessMember) approaches
-- Use `TEST_FRIEND` for regular TEST_F-style tests
-- Use `TEST_G_FRIEND` for generator-based parameterized tests
-- Continue using `GTESTG_PRIVATE_MEMBER` macros to access private members
+1. **Direct Access via TEST_FRIEND/TEST_G_FRIEND** - Recommended for most cases
+2. **Function-Based Access via GTESTG_PRIVATE_MEMBER macros** - For more explicit control
+
+Both approaches work seamlessly together and can be used in the same test.
+
+#### The Core: GTESTG_FRIEND_ACCESS_PRIVATE()
+
+Add this single macro to your class to enable private member access:
+
+```cpp
+class MyClass {
+private:
+    int privateValue = 42;
+    std::string privateName = "secret";
+public:
+    // One macro enables both access approaches
+    GTESTG_FRIEND_ACCESS_PRIVATE();
+};
+```
+
+This macro grants friend access to:
+- **VirtualAccessor template** - Used by TEST_FRIEND and TEST_G_FRIEND
+- **gtestg_private_accessMember function** - Used by GTESTG_PRIVATE_MEMBER macros
+
+#### Approach 1: Using TEST_FRIEND and TEST_G_FRIEND (Recommended)
+
+For simple cases, use `TEST_FRIEND` or `TEST_G_FRIEND` to create tests that can directly access private members:
 
 **Example with TEST_FRIEND:**
 ```cpp
-class Widget {
-private:
-    int secret_ = 42;
-public:
-    Widget() = default;
-
-    // Single macro grants both types of friend access
-    GTESTG_FRIEND_ACCESS_PRIVATE();
-};
-
-// Declare accessor
-GTESTG_PRIVATE_DECLARE_MEMBER(Widget, secret_);
-
 struct WidgetTest : ::testing::Test {
     Widget w;
 };
 
 TEST_FRIEND(WidgetTest, AccessPrivate) {
-    // Access private member using function-based accessor
-    int& secret = GTESTG_PRIVATE_MEMBER(Widget, secret_, &w);
-    EXPECT_EQ(secret, 42);
-    secret = 100;
-    EXPECT_EQ(secret, 100);
+    // Direct access to private members (via VirtualAccessor inheritance)
+    EXPECT_EQ(w.secret_, 42);
+    w.secret_ = 100;
+    EXPECT_EQ(w.secret_, 100);
 }
 ```
 
@@ -790,15 +798,199 @@ TEST_G_FRIEND(WidgetGenTest, GeneratorTest) {
     int factor = GENERATOR(1, 2, 5);
     USE_GENERATOR();
 
-    int& secret = GTESTG_PRIVATE_MEMBER(Widget, secret_, &w);
-    EXPECT_EQ(secret, 999);
-
-    printf("factor=%d, secret=%d\n", factor, secret);
+    // Direct access works in parameterized tests too
+    EXPECT_EQ(w.secret_, 999);
+    printf("factor=%d, secret=%d\n", factor, w.secret_);
 }
 ```
 
 **Multi-File Support:**
-`TEST_FRIEND` and `TEST_G_FRIEND` work correctly when tests are defined across multiple .cpp files linked into the same executable, just like regular `TEST_G`. See `test_friend_multi_file1.cpp` and `test_friend_multi_file2.cpp` for examples.
+`TEST_FRIEND` and `TEST_G_FRIEND` work correctly when tests are defined across multiple .cpp files linked into the same executable. See `test_friend_multi_file1.cpp` and `test_friend_multi_file2.cpp` for examples.
+
+#### Approach 2: Using GTESTG_PRIVATE_MEMBER Macros (Explicit Control)
+
+For more control or when working with regular `TEST_F`/`TEST_G` macros, use the function-based accessor macros. This approach requires declaring access for each member you want to access.
+
+**Step 1: Declare access outside your class (in test file):**
+```cpp
+// Declare which members you want to access
+GTESTG_PRIVATE_DECLARE_MEMBER(Widget, secret_);
+GTESTG_PRIVATE_DECLARE_MEMBER(Widget, privateName);
+```
+
+**Step 2: Access members in your tests:**
+```cpp
+TEST_FRIEND(WidgetTest, AccessPrivate) {
+    // Access using the macro
+    int& secret = GTESTG_PRIVATE_MEMBER(Widget, secret_, &w);
+    EXPECT_EQ(secret, 42);
+    secret = 100;
+    EXPECT_EQ(secret, 100);
+}
+```
+
+This approach is useful when:
+- You want explicit documentation of which members are being accessed
+- You need to access static members
+- You want custom accessor functions with additional logic
+
+#### Combining Both Approaches
+
+You can use both approaches in the same test:
+
+```cpp
+class Widget {
+private:
+    int secret_ = 42;
+    static int counter_;
+public:
+    GTESTG_FRIEND_ACCESS_PRIVATE();  // Enables both approaches
+};
+
+int Widget::counter_ = 0;
+
+// Declare access for static member
+GTESTG_PRIVATE_DECLARE_STATIC(Widget, counter_);
+
+TEST_G_FRIEND(WidgetTest, CombinedAccess) {
+    int value = GENERATOR(10, 20);
+    USE_GENERATOR();
+
+    Widget w;
+
+    // Approach 1: Direct access to instance member
+    w.secret_ = value;
+    EXPECT_EQ(w.secret_, value);
+
+    // Approach 2: Use macro for static member
+    int& count = GTESTG_PRIVATE_STATIC(Widget, counter_);
+    count++;
+}
+```
+
+### Complete API Reference for GTESTG_PRIVATE_MEMBER Macros
+
+This section provides detailed reference for the function-based private member access macros (Approach 2).
+
+#### Declaring Access to Members
+
+Place these declarations **outside** your class, typically in your test file. These declarations tell the system which private members you want to access:
+
+| Macro | Purpose | Parameters | Example |
+|-------|---------|------------|---------|
+| `GTESTG_PRIVATE_DECLARE_MEMBER` | Declare access to instance members | Target, MemberName | `GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateField)` |
+| `GTESTG_PRIVATE_DECLARE_STATIC` | Declare access to static members | Target, MemberName | `GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter)` |
+| `GTESTG_PRIVATE_DECLARE_FUNCTION` | Declare custom accessor function | ThisClass, Target, FuncName | `GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum)` |
+
+#### Macros for Accessing Members
+
+Use these macros **inside** your test functions to access private members:
+
+| Macro | Purpose | Parameters | Example |
+|-------|---------|------------|---------|
+| `GTESTG_PRIVATE_MEMBER` | Access instance member | Target, MemberName, &obj | `GTESTG_PRIVATE_MEMBER(MyClass, privateField, &obj)` |
+| `GTESTG_PRIVATE_STATIC` | Access static member | Target, MemberName | `GTESTG_PRIVATE_STATIC(MyClass, staticCounter)` |
+| `GTESTG_PRIVATE_CALL` | Call custom function with explicit test object | Target, FuncName, test_obj, &obj | `GTESTG_PRIVATE_CALL(MyClass, GetSum, this, &obj)` |
+| `GTESTG_PRIVATE_CALL_ON_TEST` | Call custom function (uses implicit 'this') | ThisClass, Target, FuncName, &obj | `GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj)` |
+
+#### Detailed Usage Examples
+
+The following examples demonstrate comprehensive usage patterns for the GTESTG_PRIVATE_* macros.
+
+**Example 1: Accessing Instance Members**
+```cpp
+class MyClass {
+private:
+    int privateValue = 42;
+    std::string privateName = "secret";
+public:
+    GTESTG_FRIEND_ACCESS_PRIVATE();
+};
+
+// Declare access (in test file)
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateValue);
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateName);
+
+TEST_G(MyTest, AccessPrivate) {
+    int value = GENERATOR(10, 20, 30);
+    USE_GENERATOR();
+
+    MyClass obj;
+
+    // Access and modify private members
+    int& val = GTESTG_PRIVATE_MEMBER(MyClass, privateValue, &obj);
+    EXPECT_EQ(val, 42);
+    val = value;  // Can modify
+    EXPECT_EQ(val, value);
+
+    std::string& name = GTESTG_PRIVATE_MEMBER(MyClass, privateName, &obj);
+    EXPECT_EQ(name, "secret");
+    name = "modified";
+}
+```
+
+**Example 2: Accessing Static Members**
+```cpp
+class MyClass {
+private:
+    static int staticCounter;
+public:
+    GTESTG_FRIEND_ACCESS_PRIVATE();
+};
+
+int MyClass::staticCounter = 100;
+
+// Declare access to static member
+GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter);
+
+TEST_G(MyTest, AccessStatic) {
+    USE_GENERATOR();
+
+    // Access static member (no object needed)
+    int& count = GTESTG_PRIVATE_STATIC(MyClass, staticCounter);
+    EXPECT_EQ(count, 100);
+    count = 200;  // Can modify
+    EXPECT_EQ(count, 200);
+}
+```
+
+**Example 3: Custom Accessor Functions**
+```cpp
+class MyClass {
+private:
+    int field1 = 10;
+    int field2 = 20;
+public:
+    GTESTG_FRIEND_ACCESS_PRIVATE();
+};
+
+class MyTest : public ::gtest_generator::TestWithGenerator {};
+
+// Declare custom function with access to both test context and private members
+// THIS = test object, TARGET = object being accessed
+GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum) {
+    // Can access test context: THIS->GetParam()
+    // Can access private members: TARGET->field1, TARGET->field2
+    return TARGET->field1 + TARGET->field2;
+}
+
+TEST_G(MyTest, CustomFunction) {
+    int multiplier = GENERATOR(1, 2, 3);
+    USE_GENERATOR();
+
+    MyClass obj;
+
+    // Call custom function using CALL_ON_TEST (uses implicit 'this')
+    int sum = GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj);
+    EXPECT_EQ(sum, 30);  // 10 + 20
+
+    // Alternative: Pass test object explicitly
+    int sum2 = GTESTG_PRIVATE_CALL(MyClass, GetSum, static_cast<MyTest*>(this), &obj);
+    EXPECT_EQ(sum2, 30);
+}
+```
+
+For complete examples, see `test_private_access.cpp` and `test_define_macros.cpp`.
 
 ## Array Comparison Macros
 

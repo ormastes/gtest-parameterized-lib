@@ -8,7 +8,9 @@
 #include <algorithm>
 #include <type_traits>
 
-// ===== Friend-access test helpers (private/protected access) =================
+// ============================================================================
+// Private Member Access for Testing
+// ============================================================================
 #ifndef GTESTG_FRIEND_INFRA_INCLUDED
 #define GTESTG_FRIEND_INFRA_INCLUDED
 
@@ -79,6 +81,94 @@ class VirtualAccessor : public Suite {};
           __gtest_generator__get_generator_##TestClassName##TestName##Friend()));           \
   TEST_P(TestClassName##__##TestName##__Friend, __)
 
+
+// Template function declaration (prevent multiple definition with #ifdef)
+// This block can be copied to a common header file for sharing across production and test code
+#ifndef GTEST_GENERATOR_ACCESS_PRIVATE_MEMBER_DEFINED
+#define GTEST_GENERATOR_ACCESS_PRIVATE_MEMBER_DEFINED
+
+template <typename ID, typename TestCase, typename Target>
+auto gtestg_private_accessMember(TestCase* test_case, Target* target = nullptr) -> decltype(auto);
+
+
+// Unified macro that grants friend access for ALL approaches:
+// - Direct friend (GTESTG_FRIEND_TEST - not needed but compatible)
+// - VirtualAccessor template (for TEST_FRIEND, TEST_G_FRIEND)
+// - Function-based (gtestg_private_accessMember for GTESTG_PRIVATE_MEMBER macros)
+#define GTESTG_FRIEND_ACCESS_PRIVATE() \
+  template <class, class> friend class ::gtestg_detail::VirtualAccessor; \
+  template <typename _ID, typename _TC, typename _TG> \
+  friend auto ::gtestg_private_accessMember(_TC*, _TG*) -> decltype(auto)
+
+
+#endif  // GTEST_GENERATOR_ACCESS_PRIVATE_MEMBER_DEFINED
+
+// Empty macro for production builds - define this in your production headers
+// to disable friend access when not testing
+#ifndef GTESTG_FRIEND_ACCESS_PRIVATE
+#define GTESTG_FRIEND_ACCESS_PRIVATE()
+#endif
+
+// Helper macro to concatenate tokens for ID generation
+#define GTESTG_PRIVATE_CONCAT_IMPL(a, b) a##_##b
+#define GTESTG_PRIVATE_CONCAT(a, b) GTESTG_PRIVATE_CONCAT_IMPL(a, b)
+
+// Dummy test case type for simplified member access
+struct gtestg_private_dummy_test;
+
+// Macro to declare access to instance members
+// Usage: GTESTG_PRIVATE_DECLARE_MEMBER(Target, MemberName)
+// Example: GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateValue)
+#define GTESTG_PRIVATE_DECLARE_MEMBER(Target, Member) \
+    struct GTESTG_PRIVATE_CONCAT(Target, Member); \
+    template <> \
+    inline auto gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, Member), gtestg_private_dummy_test, Target>(gtestg_private_dummy_test* THIS, Target* TARGET) -> decltype(auto) { \
+        return (TARGET->Member); \
+    }
+
+// Macro to declare access to static members
+// Usage: GTESTG_PRIVATE_DECLARE_STATIC(Target, MemberName)
+// Example: GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter)
+#define GTESTG_PRIVATE_DECLARE_STATIC(Target, Member) \
+    struct GTESTG_PRIVATE_CONCAT(Target, Member); \
+    template <> \
+    inline auto gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, Member), gtestg_private_dummy_test, Target>(gtestg_private_dummy_test* THIS, Target* TARGET) -> decltype(auto) { \
+        return (Target::Member); \
+    }
+
+// Macro to declare a custom function for accessing private members
+// Usage: GTESTG_PRIVATE_DECLARE_FUNCTION(ThisClass, Target, FunctionName) { return custom_expression; }
+// Example: GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum) { return TARGET->field1 + TARGET->field2; }
+// ThisClass allows access to test context (e.g., THIS->GetParam())
+#define GTESTG_PRIVATE_DECLARE_FUNCTION(ThisClass, Target, FuncName) \
+    struct GTESTG_PRIVATE_CONCAT(Target, FuncName); \
+    template <> \
+    inline auto gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, FuncName), ThisClass, Target>(ThisClass* THIS, Target* TARGET) -> decltype(auto)
+
+// Macro for accessing instance members
+// Usage: GTESTG_PRIVATE_MEMBER(Target, MemberName, &obj)
+#define GTESTG_PRIVATE_MEMBER(Target, Member, obj) \
+    gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, Member), gtestg_private_dummy_test, Target>(nullptr, obj)
+
+// Macro for accessing static members
+// Usage: GTESTG_PRIVATE_STATIC(Target, MemberName)
+#define GTESTG_PRIVATE_STATIC(Target, Member) \
+    gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, Member), gtestg_private_dummy_test, Target>(nullptr, nullptr)
+
+// Macro for calling custom functions with an explicit test case object
+// Usage: GTESTG_PRIVATE_CALL(Target, FunctionName, test_obj, &obj)
+// The TestCase template parameter is inferred from test_obj's type
+#define GTESTG_PRIVATE_CALL(Target, FuncName, test_obj, ...) \
+    gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, FuncName), typename std::decay<decltype(*test_obj)>::type, Target>(test_obj, ##__VA_ARGS__)
+
+// Macro for calling custom functions from within a test (uses 'this')
+// Usage: GTESTG_PRIVATE_CALL_ON_TEST(ThisClass, Target, FunctionName, &obj)
+// ThisClass should match the type used in GTESTG_PRIVATE_DECLARE_FUNCTION
+#define GTESTG_PRIVATE_CALL_ON_TEST(ThisClass, Target, FuncName, ...) \
+    gtestg_private_accessMember<GTESTG_PRIVATE_CONCAT(Target, FuncName), ThisClass, Target>(static_cast<ThisClass*>(this), ##__VA_ARGS__)
+
+
+
 #endif // GTESTG_FRIEND_INFRA_INCLUDED
 // ============================================================================
 
@@ -104,10 +194,29 @@ enum class SamplingMode { FULL, ALIGNED };
 inline thread_local SamplingMode tl_mode = SamplingMode::FULL;
 
 // Column sizes discovered during counting; cursor during run
-inline thread_local std::vector<int> tl_col_sizes;
-inline thread_local int tl_col_ix = 0;
-inline thread_local int tl_last_param = -1;  // Track last param to reset tl_col_ix
-inline thread_local std::string tl_last_test_key = "";  // Track last test to reset state
+// Use inline functions to avoid multiple definition errors with thread_local on Windows/MinGW
+inline std::vector<int>& get_tl_col_sizes() {
+    static thread_local std::vector<int> instance;
+    return instance;
+}
+inline int& get_tl_col_ix() {
+    static thread_local int instance = 0;
+    return instance;
+}
+inline int& get_tl_last_param() {
+    static thread_local int instance = -1;
+    return instance;
+}
+inline std::string& get_tl_last_test_key() {
+    static thread_local std::string instance;
+    return instance;
+}
+
+// References for backward compatibility
+#define tl_col_sizes get_tl_col_sizes()
+#define tl_col_ix get_tl_col_ix()
+#define tl_last_param get_tl_last_param()
+#define tl_last_test_key get_tl_last_test_key()
 
 // Persist per-test column sizes so run phase can access them
 inline std::map<std::string, std::vector<int>> g_colsizes_map;

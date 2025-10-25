@@ -562,9 +562,8 @@ private:
 public:
     MyClass(int v, const std::string& n) : privateValue(v), privateName(n) {}
 
-    // Grant friend access to specific tests
-    GTESTG_FRIEND_TEST(MyClassTest, AccessPrivateMembers);
-    GTESTG_FRIEND_TEST(MyClassTest, ModifyPrivateMembers);
+    // Enable unified private member access
+    GTESTG_FRIEND_ACCESS_PRIVATE();
 };
 
 // In your test file
@@ -603,9 +602,7 @@ TEST_FRIEND(MyClassTest, ModifyPrivateMembers) {
 
 | Macro | Purpose | Usage |
 |-------|---------|-------|
-| `GTESTG_FRIEND_TEST(Suite, TestName)` | Grant friend access to a specific TEST_F test | Place in class definition |
-| `GTESTG_FRIEND_TEST_G(TestClassName, TestName)` | Grant friend access to a TEST_G test | Place in class definition |
-| `GTESTG_FRIEND_TEST_SUITE(Suite)` | Grant friend access to all tests in a suite | Place in class definition |
+| `GTESTG_FRIEND_ACCESS_PRIVATE()` | Grant friend access for private member testing | Place in class definition |
 
 #### Macros for Test Files
 
@@ -623,8 +620,8 @@ class Widget {
 private:
     int secret_ = 42;
 public:
-    // Grant access to specific test
-    GTESTG_FRIEND_TEST(WidgetTest, CheckSecret);
+    // Enable private member access
+    GTESTG_FRIEND_ACCESS_PRIVATE();
 };
 
 // Test file
@@ -645,8 +642,8 @@ private:
     int factor_ = 10;
     int multiply(int x) const { return x * factor_; }
 public:
-    // Grant access to generator test
-    GTESTG_FRIEND_TEST_G(CalcTest, TestMultiply);
+    // Enable private member access
+    GTESTG_FRIEND_ACCESS_PRIVATE();
 };
 
 // Test file
@@ -664,27 +661,27 @@ TEST_G_FRIEND(CalcTest, TestMultiply) {
 }
 ```
 
-#### Grant Access to All Tests in a Suite
+#### Multiple Tests Accessing Same Class
 ```cpp
-// Target class - grants access to ALL tests in MyTestSuite
+// Target class - grants access to all tests using TEST_FRIEND
 class MyClass {
 private:
     int value_ = 100;
 public:
-    // Grant access to entire test suite
-    GTESTG_FRIEND_TEST_SUITE(MyTestSuite);
+    // Enable private member access
+    GTESTG_FRIEND_ACCESS_PRIVATE();
 };
 
-// Test file - all tests in this suite have access
+// Test file - all TEST_FRIEND tests have access
 struct MyTestSuite : ::testing::Test {
     MyClass obj;
 };
 
-TEST_F(MyTestSuite, Test1) {
+TEST_FRIEND(MyTestSuite, Test1) {
     EXPECT_EQ(obj.value_, 100);  // Has access
 }
 
-TEST_F(MyTestSuite, Test2) {
+TEST_FRIEND(MyTestSuite, Test2) {
     obj.value_ = 200;  // Also has access
     EXPECT_EQ(obj.value_, 200);
 }
@@ -697,7 +694,7 @@ class Base {
 private:
     int base_secret_ = 10;
 public:
-    GTESTG_FRIEND_TEST(DerivedTest, AccessBoth);
+    GTESTG_FRIEND_ACCESS_PRIVATE();
 };
 
 // Derived class
@@ -705,7 +702,7 @@ class Derived : public Base {
 private:
     int derived_secret_ = 20;
 public:
-    GTESTG_FRIEND_TEST(DerivedTest, AccessBoth);
+    GTESTG_FRIEND_ACCESS_PRIVATE();
 };
 
 // Test
@@ -721,11 +718,12 @@ TEST_FRIEND(DerivedTest, AccessBoth) {
 
 ### Important Notes
 
-1. **Explicit Grant Required**: Each test that needs private access must be explicitly listed in the target class
-2. **No Magic**: Uses standard C++ friend declarations - simple and predictable
-3. **TEST_FRIEND is Optional**: `TEST_FRIEND` is just a convenience macro that maps to `TEST_F`. You can use regular `TEST_F` if the class has the appropriate `GTESTG_FRIEND_TEST` declaration
-4. **Compile-Time Safety**: If a test tries to access private members without being granted friend access, you'll get a compile error
-5. **Maintenance**: When you add a new test that needs private access, remember to add the corresponding `GTESTG_FRIEND_TEST` declaration to the target class
+1. **Simple Setup**: Just add `GTESTG_FRIEND_ACCESS_PRIVATE()` to your class once
+2. **Root Namespace Required**: `TEST_FRIEND` and `TEST_G_FRIEND` must be defined at the root namespace (not inside any namespace). If you need tests in a namespace, use regular `TEST_F`/`TEST_G` with GTESTG_PRIVATE_MEMBER macros instead
+3. **No Magic**: Uses standard C++ friend declarations - simple and predictable
+4. **Use TEST_FRIEND or TEST_G_FRIEND**: These macros enable direct access to private members
+5. **Compile-Time Safety**: If a test tries to access private members without proper setup, you'll get a compile error
+6. **Clean and Maintainable**: No need to list individual tests - just use the appropriate test macro
 
 ### When to Use This Feature
 
@@ -781,7 +779,7 @@ struct WidgetTest : ::testing::Test {
 };
 
 TEST_FRIEND(WidgetTest, AccessPrivate) {
-    // Direct access to private members (via VirtualAccessor inheritance)
+    // Direct access to private members (via VirtualAccessor specialization)
     EXPECT_EQ(w.secret_, 42);
     w.secret_ = 100;
     EXPECT_EQ(w.secret_, 100);
@@ -806,6 +804,13 @@ TEST_G_FRIEND(WidgetGenTest, GeneratorTest) {
 
 **Multi-File Support:**
 `TEST_FRIEND` and `TEST_G_FRIEND` work correctly when tests are defined across multiple .cpp files linked into the same executable. See `test_friend_multi_file1.cpp` and `test_friend_multi_file2.cpp` for examples.
+
+**How It Works:**
+- `TEST_FRIEND` and `TEST_G_FRIEND` create an explicit template specialization of `VirtualAccessor<Suite, TestName>` inside the `gtestg_detail` namespace
+- This specialization is granted friend access via `GTESTG_FRIEND_ACCESS_PRIVATE()`
+- Because `VirtualAccessor` is a friend and derives from your test fixture, it can access private members of the target class
+- The test body executes within the context of this friend class, enabling direct private member access
+- Each test gets a unique tag type to create a separate specialization, avoiding naming conflicts
 
 #### Approach 2: Using GTESTG_PRIVATE_MEMBER Macros (Explicit Control)
 

@@ -82,10 +82,48 @@ TEST_G(MyTest, AsymmetricCombinations) {
     int size = GENERATOR(1, 2, 3);     // 3个值
     int scale = GENERATOR(10, 100);    // 2个值
     USE_GENERATOR();
-    
+
     // 生成6个测试组合
     int result = size * scale;
     EXPECT_GT(result, 0);
+}
+```
+
+### 在表达式中使用生成的值
+```cpp
+TEST_G(MyTest, ComputedValues) {
+    int base = GENERATOR(1, 2);
+    int multiplier = GENERATOR(10, 20, 30);
+    USE_GENERATOR();
+
+    std::vector<int> data;
+    for (int i = 0; i < base; ++i) {
+        data.push_back(i * multiplier);
+    }
+
+    EXPECT_EQ(data.size(), base);
+    if (!data.empty()) {
+        EXPECT_EQ(data.back(), (base - 1) * multiplier);
+    }
+}
+```
+
+### 复杂的测试逻辑
+```cpp
+TEST_G(MyTest, ConditionalLogic) {
+    int mode = GENERATOR(0, 1, 2);     // 3种模式
+    int value = GENERATOR(100, 200);   // 2个值
+    USE_GENERATOR();
+
+    int result;
+    switch (mode) {
+        case 0: result = value + 10; break;
+        case 1: result = value * 2; break;
+        case 2: result = value - 50; break;
+    }
+
+    EXPECT_GT(result, 0);
+    printf("模式 %d 使用值 %d 得到结果 %d\n", mode, value, result);
 }
 ```
 
@@ -93,6 +131,7 @@ TEST_G(MyTest, AsymmetricCombinations) {
 
 ### 使用类和对象
 
+#### 直接对象生成
 ```cpp
 class TestObject {
 public:
@@ -109,29 +148,164 @@ TEST_G(MyTest, ObjectGeneration) {
     auto obj1 = GENERATOR(TestObject(1, "第一"), TestObject(2, "第二"));
     auto obj2 = GENERATOR(TestObject(10, "十"), TestObject(20, "二十"));
     USE_GENERATOR();
-    
+
     EXPECT_LT(obj1, obj2);
-    printf("对象: obj1={%d, %s}, obj2={%d, %s}\n", 
-           obj1.value, obj1.name.c_str(), 
+    printf("对象: obj1={%d, %s}, obj2={%d, %s}\n",
+           obj1.value, obj1.name.c_str(),
            obj2.value, obj2.name.c_str());
+}
+```
+
+#### 在构造函数参数中使用GENERATOR
+```cpp
+TEST_G(MyTest, ConstructorWithGenerators) {
+    // GENERATOR值用作构造函数参数
+    int val1 = GENERATOR(1, 2);
+    int val2 = GENERATOR(10, 20);
+    USE_GENERATOR();
+
+    TestObject objects[] = {
+        TestObject(val1, "test"),
+        TestObject(val2, "demo")
+    };
+
+    EXPECT_LT(objects[0].value, objects[1].value);
+    printf("数组对象: [0]={%d,%s}, [1]={%d,%s}\n",
+           objects[0].value, objects[0].name.c_str(),
+           objects[1].value, objects[1].name.c_str());
+}
+```
+
+### 使用指针和动态内存
+
+#### 生成对象指针
+```cpp
+TEST_G(MyTest, PointerGeneration) {
+    // 生成指向不同对象的指针
+    // 注意：小心内存管理
+    auto* ptr1 = GENERATOR(new TestObject(1, "第一"),
+                          new TestObject(2, "第二"));
+    auto* ptr2 = GENERATOR(new TestObject(10, "十"),
+                          new TestObject(20, "二十"));
+    USE_GENERATOR();
+
+    EXPECT_LT(*ptr1, *ptr2);
+    printf("指针: ptr1={%d, %s}, ptr2={%d, %s}\n",
+           ptr1->value, ptr1->name.c_str(),
+           ptr2->value, ptr2->name.c_str());
+
+    // 清理
+    delete ptr1;
+    delete ptr2;
+}
+```
+
+#### 嵌套GENERATOR调用（高级）
+```cpp
+TEST_G(MyTest, NestedGenerators) {
+    // 复杂的嵌套生成 - 每个外部GENERATOR包含内部GENERATOR调用
+    int inner1 = GENERATOR(1, 2);
+    int inner2 = GENERATOR(3, 4);
+    int inner3 = GENERATOR(10, 20);
+    int inner4 = GENERATOR(30, 40);
+    USE_GENERATOR();
+
+    auto* obj1 = new TestObject(inner1, "第一");
+    auto* obj2 = new TestObject(inner3, "第二");
+
+    EXPECT_LT(obj1->value, obj2->value);
+    printf("嵌套: obj1={%d}, obj2={%d}\n", obj1->value, obj2->value);
+
+    delete obj1;
+    delete obj2;
 }
 ```
 
 ### 使用STL容器
 
+#### 生成容器大小和内容
 ```cpp
 TEST_G(MyTest, STLContainers) {
     auto size = GENERATOR(1, 2, 3);
     auto multiplier = GENERATOR(10, 100);
     USE_GENERATOR();
-    
+
     std::vector<int> vec;
     for (int i = 0; i < size; ++i) {
         vec.push_back(i * multiplier);
     }
-    
+
     EXPECT_EQ(vec.size(), size);
-    printf("向量: 大小=%d, 乘数=%d\n", size, multiplier);
+    if (!vec.empty()) {
+        EXPECT_EQ(vec.back(), (size - 1) * multiplier);
+    }
+
+    printf("向量: 大小=%d, 乘数=%d, 元素=[", size, multiplier);
+    for (int v : vec) printf("%d ", v);
+    printf("]\n");
+}
+```
+
+#### 生成字符串组合
+```cpp
+TEST_G(MyTest, StringCombinations) {
+    auto prefix_choice = GENERATOR(0, 1);
+    auto suffix_choice = GENERATOR(0, 1);
+    auto repeat = GENERATOR(1, 2);
+    USE_GENERATOR();
+
+    std::string prefix = prefix_choice ? "你好" : "嗨";
+    std::string suffix = suffix_choice ? "世界" : "大家";
+
+    std::string result;
+    for (int i = 0; i < repeat; ++i) {
+        if (i > 0) result += " ";
+        result += prefix + " " + suffix;
+    }
+
+    EXPECT_FALSE(result.empty());
+    printf("字符串: prefix='%s', suffix='%s', repeat=%d => '%s'\n",
+           prefix.c_str(), suffix.c_str(), repeat, result.c_str());
+}
+```
+
+### 使用智能指针
+
+#### 使用unique_ptr和GENERATOR
+```cpp
+TEST_G(MyTest, SmartPointers) {
+    auto value1 = GENERATOR(1, 2);
+    auto value2 = GENERATOR(10, 20);
+    USE_GENERATOR();
+
+    auto ptr1 = std::make_unique<TestObject>(value1, "第一");
+    auto ptr2 = std::make_unique<TestObject>(value2, "第二");
+
+    EXPECT_LT(*ptr1, *ptr2);
+    printf("智能指针: ptr1={%d, %s}, ptr2={%d, %s}\n",
+           ptr1->value, ptr1->name.c_str(),
+           ptr2->value, ptr2->name.c_str());
+}
+```
+
+### 复杂结构体示例
+
+#### 生成具有多个字段的结构体
+```cpp
+struct Point {
+    int x, y;
+    Point(int x_, int y_) : x(x_), y(y_) {}
+};
+
+TEST_G(MyTest, StructGeneration) {
+    auto p1 = GENERATOR(Point{0, 0}, Point{1, 1});
+    auto p2 = GENERATOR(Point{10, 10}, Point{20, 20});
+    USE_GENERATOR();
+
+    int distance = abs(p2.x - p1.x) + abs(p2.y - p1.y);
+    EXPECT_GT(distance, 0);
+    printf("点: p1=(%d,%d), p2=(%d,%d), 距离=%d\n",
+           p1.x, p1.y, p2.x, p2.y, distance);
 }
 ```
 
@@ -613,6 +787,263 @@ TEST_G_FRIEND(WidgetGenTest, GeneratorTest) {
 
 **多文件支持:**
 `TEST_FRIEND`和`TEST_G_FRIEND`在多个.cpp文件中定义测试并链接到同一可执行文件时正确工作，就像常规`TEST_G`一样。有关示例，请参见`test_friend_multi_file1.cpp`和`test_friend_multi_file2.cpp`。
+
+### 统一私有成员访问系统
+
+该库提供了一个统一系统，用于访问测试中的私有和保护成员。通过向类中添加单个宏`GTESTG_FRIEND_ACCESS_PRIVATE()`，您可以启用私有成员访问的**两种互补方法**:
+
+1. **通过TEST_FRIEND/TEST_G_FRIEND直接访问** - 推荐用于大多数情况
+2. **通过GTESTG_PRIVATE_MEMBER宏的基于函数的访问** - 用于更明确的控制
+
+这两种方法可以无缝协作并在同一测试中使用。
+
+#### 核心: GTESTG_FRIEND_ACCESS_PRIVATE()
+
+向类中添加此单个宏以启用私有成员访问:
+
+```cpp
+class MyClass {
+private:
+    int privateValue = 42;
+    std::string privateName = "secret";
+public:
+    // 一个宏启用两种访问方法
+    GTESTG_FRIEND_ACCESS_PRIVATE();
+};
+```
+
+此宏授予以下friend访问权限:
+- **VirtualAccessor模板** - 由TEST_FRIEND和TEST_G_FRIEND使用
+- **gtestg_private_accessMember函数** - 由GTESTG_PRIVATE_MEMBER宏使用
+
+#### 方法1: 使用TEST_FRIEND和TEST_G_FRIEND (推荐)
+
+对于简单情况，使用`TEST_FRIEND`或`TEST_G_FRIEND`创建可以直接访问私有成员的测试:
+
+**TEST_FRIEND示例:**
+```cpp
+struct WidgetTest : ::testing::Test {
+    Widget w;
+};
+
+TEST_FRIEND(WidgetTest, AccessPrivate) {
+    // 直接访问私有成员(通过VirtualAccessor特化)
+    EXPECT_EQ(w.secret_, 42);
+    w.secret_ = 100;
+    EXPECT_EQ(w.secret_, 100);
+}
+```
+
+**TEST_G_FRIEND示例:**
+```cpp
+struct WidgetGenTest : ::gtest_generator::TestWithGenerator {
+    Widget w{999};
+};
+
+TEST_G_FRIEND(WidgetGenTest, GeneratorTest) {
+    int factor = GENERATOR(1, 2, 5);
+    USE_GENERATOR();
+
+    // 参数化测试中也可以直接访问
+    EXPECT_EQ(w.secret_, 999);
+    printf("factor=%d, secret=%d\n", factor, w.secret_);
+}
+```
+
+**多文件支持:**
+`TEST_FRIEND`和`TEST_G_FRIEND`在测试跨多个.cpp文件定义并链接到同一可执行文件时正确工作。有关示例，请参见`test_friend_multi_file1.cpp`和`test_friend_multi_file2.cpp`。
+
+**工作原理:**
+- `TEST_FRIEND`和`TEST_G_FRIEND`在`gtestg_detail`命名空间内创建`VirtualAccessor<Suite, TestName>`的显式模板特化
+- 此特化通过`GTESTG_FRIEND_ACCESS_PRIVATE()`授予friend访问权限
+- 因为`VirtualAccessor`是friend并继承自您的测试fixture，它可以访问目标类的私有成员
+- 测试体在此friend类的上下文中执行，从而启用直接私有成员访问
+- 每个测试获得唯一的标签类型以创建单独的特化，避免命名冲突
+
+#### 方法2: 使用GTESTG_PRIVATE_MEMBER宏 (显式控制)
+
+对于需要更多控制或使用常规`TEST_F`/`TEST_G`宏时，使用基于函数的访问器宏。此方法需要为要访问的每个成员声明访问权限。
+
+**步骤1: 在类外部声明访问(在测试文件中):**
+```cpp
+// 声明要访问的成员
+GTESTG_PRIVATE_DECLARE_MEMBER(Widget, secret_);
+GTESTG_PRIVATE_DECLARE_MEMBER(Widget, privateName);
+```
+
+**步骤2: 在测试中访问成员:**
+```cpp
+TEST_FRIEND(WidgetTest, AccessPrivate) {
+    // 使用宏访问
+    int& secret = GTESTG_PRIVATE_MEMBER(Widget, secret_, &w);
+    EXPECT_EQ(secret, 42);
+    secret = 100;
+    EXPECT_EQ(secret, 100);
+}
+```
+
+此方法适用于:
+- 您希望明确记录正在访问哪些成员
+- 您需要访问静态成员
+- 您需要具有附加逻辑的自定义访问器函数
+
+#### 结合两种方法
+
+您可以在同一测试中使用两种方法:
+
+```cpp
+class Widget {
+private:
+    int secret_ = 42;
+    static int counter_;
+public:
+    GTESTG_FRIEND_ACCESS_PRIVATE();  // 启用两种方法
+};
+
+int Widget::counter_ = 0;
+
+// 为静态成员声明访问
+GTESTG_PRIVATE_DECLARE_STATIC(Widget, counter_);
+
+TEST_G_FRIEND(WidgetTest, CombinedAccess) {
+    int value = GENERATOR(10, 20);
+    USE_GENERATOR();
+
+    Widget w;
+
+    // 方法1: 直接访问实例成员
+    w.secret_ = value;
+    EXPECT_EQ(w.secret_, value);
+
+    // 方法2: 使用宏访问静态成员
+    int& count = GTESTG_PRIVATE_STATIC(Widget, counter_);
+    count++;
+}
+```
+
+### GTESTG_PRIVATE_MEMBER宏的完整API参考
+
+本节提供基于函数的私有成员访问宏(方法2)的详细参考。
+
+#### 声明成员访问
+
+将这些声明放在类**外部**，通常在测试文件中。这些声明告诉系统您想要访问哪些私有成员:
+
+| 宏 | 用途 | 参数 | 示例 |
+|-------|---------|------------|---------|
+| `GTESTG_PRIVATE_DECLARE_MEMBER` | 声明访问实例成员 | Target, MemberName | `GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateField)` |
+| `GTESTG_PRIVATE_DECLARE_STATIC` | 声明访问静态成员 | Target, MemberName | `GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter)` |
+| `GTESTG_PRIVATE_DECLARE_FUNCTION` | 声明自定义访问器函数 | ThisClass, Target, FuncName | `GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum)` |
+
+#### 访问成员的宏
+
+在测试函数**内部**使用这些宏访问私有成员:
+
+| 宏 | 用途 | 参数 | 示例 |
+|-------|---------|------------|---------|
+| `GTESTG_PRIVATE_MEMBER` | 访问实例成员 | Target, MemberName, &obj | `GTESTG_PRIVATE_MEMBER(MyClass, privateField, &obj)` |
+| `GTESTG_PRIVATE_STATIC` | 访问静态成员 | Target, MemberName | `GTESTG_PRIVATE_STATIC(MyClass, staticCounter)` |
+| `GTESTG_PRIVATE_CALL` | 使用显式测试对象调用自定义函数 | Target, FuncName, test_obj, &obj | `GTESTG_PRIVATE_CALL(MyClass, GetSum, this, &obj)` |
+| `GTESTG_PRIVATE_CALL_ON_TEST` | 调用自定义函数(使用隐式'this') | ThisClass, Target, FuncName, &obj | `GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj)` |
+
+#### 详细使用示例
+
+以下示例演示了GTESTG_PRIVATE_*宏的综合使用模式。
+
+**示例1: 访问实例成员**
+```cpp
+class MyClass {
+private:
+    int privateValue = 42;
+    std::string privateName = "secret";
+public:
+    GTESTG_FRIEND_ACCESS_PRIVATE();
+};
+
+// 声明访问(在测试文件中)
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateValue);
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateName);
+
+TEST_G(MyTest, AccessPrivate) {
+    int value = GENERATOR(10, 20, 30);
+    USE_GENERATOR();
+
+    MyClass obj;
+
+    // 访问和修改私有成员
+    int& val = GTESTG_PRIVATE_MEMBER(MyClass, privateValue, &obj);
+    EXPECT_EQ(val, 42);
+    val = value;  // 可以修改
+    EXPECT_EQ(val, value);
+
+    std::string& name = GTESTG_PRIVATE_MEMBER(MyClass, privateName, &obj);
+    EXPECT_EQ(name, "secret");
+    name = "modified";
+}
+```
+
+**示例2: 访问静态成员**
+```cpp
+class MyClass {
+private:
+    static int staticCounter;
+public:
+    GTESTG_FRIEND_ACCESS_PRIVATE();
+};
+
+int MyClass::staticCounter = 100;
+
+// 声明访问静态成员
+GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter);
+
+TEST_G(MyTest, AccessStatic) {
+    USE_GENERATOR();
+
+    // 访问静态成员(不需要对象)
+    int& count = GTESTG_PRIVATE_STATIC(MyClass, staticCounter);
+    EXPECT_EQ(count, 100);
+    count = 200;  // 可以修改
+    EXPECT_EQ(count, 200);
+}
+```
+
+**示例3: 自定义访问器函数**
+```cpp
+class MyClass {
+private:
+    int field1 = 10;
+    int field2 = 20;
+public:
+    GTESTG_FRIEND_ACCESS_PRIVATE();
+};
+
+class MyTest : public ::gtest_generator::TestWithGenerator {};
+
+// 声明具有测试上下文和私有成员访问权限的自定义函数
+// THIS = 测试对象, TARGET = 被访问的对象
+GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum) {
+    // 可以访问测试上下文: THIS->GetParam()
+    // 可以访问私有成员: TARGET->field1, TARGET->field2
+    return TARGET->field1 + TARGET->field2;
+}
+
+TEST_G(MyTest, CustomFunction) {
+    int multiplier = GENERATOR(1, 2, 3);
+    USE_GENERATOR();
+
+    MyClass obj;
+
+    // 使用CALL_ON_TEST调用自定义函数(使用隐式'this')
+    int sum = GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj);
+    EXPECT_EQ(sum, 30);  // 10 + 20
+
+    // 替代方法: 显式传递测试对象
+    int sum2 = GTESTG_PRIVATE_CALL(MyClass, GetSum, static_cast<MyTest*>(this), &obj);
+    EXPECT_EQ(sum2, 30);
+}
+```
+
+有关完整示例，请参见`test_private_access.cpp`和`test_define_macros.cpp`。
 
 ## 数组比较宏
 

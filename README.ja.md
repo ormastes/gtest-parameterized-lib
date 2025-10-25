@@ -82,10 +82,48 @@ TEST_G(MyTest, AsymmetricCombinations) {
     int size = GENERATOR(1, 2, 3);     // 3つの値
     int scale = GENERATOR(10, 100);    // 2つの値
     USE_GENERATOR();
-    
+
     // 6つのテスト組み合わせを生成
     int result = size * scale;
     EXPECT_GT(result, 0);
+}
+```
+
+### 式で生成された値の使用
+```cpp
+TEST_G(MyTest, ComputedValues) {
+    int base = GENERATOR(1, 2);
+    int multiplier = GENERATOR(10, 20, 30);
+    USE_GENERATOR();
+
+    std::vector<int> data;
+    for (int i = 0; i < base; ++i) {
+        data.push_back(i * multiplier);
+    }
+
+    EXPECT_EQ(data.size(), base);
+    if (!data.empty()) {
+        EXPECT_EQ(data.back(), (base - 1) * multiplier);
+    }
+}
+```
+
+### 複雑なテストロジック
+```cpp
+TEST_G(MyTest, ConditionalLogic) {
+    int mode = GENERATOR(0, 1, 2);     // 3つのモード
+    int value = GENERATOR(100, 200);   // 2つの値
+    USE_GENERATOR();
+
+    int result;
+    switch (mode) {
+        case 0: result = value + 10; break;
+        case 1: result = value * 2; break;
+        case 2: result = value - 50; break;
+    }
+
+    EXPECT_GT(result, 0);
+    printf("モード %d に値 %d を適用した結果 %d\n", mode, value, result);
 }
 ```
 
@@ -93,6 +131,7 @@ TEST_G(MyTest, AsymmetricCombinations) {
 
 ### クラスとオブジェクトの操作
 
+#### 直接オブジェクト生成
 ```cpp
 class TestObject {
 public:
@@ -109,29 +148,164 @@ TEST_G(MyTest, ObjectGeneration) {
     auto obj1 = GENERATOR(TestObject(1, "最初"), TestObject(2, "二番目"));
     auto obj2 = GENERATOR(TestObject(10, "十"), TestObject(20, "二十"));
     USE_GENERATOR();
-    
+
     EXPECT_LT(obj1, obj2);
-    printf("オブジェクト: obj1={%d, %s}, obj2={%d, %s}\n", 
-           obj1.value, obj1.name.c_str(), 
+    printf("オブジェクト: obj1={%d, %s}, obj2={%d, %s}\n",
+           obj1.value, obj1.name.c_str(),
            obj2.value, obj2.name.c_str());
+}
+```
+
+#### コンストラクタ引数でGENERATORを使用
+```cpp
+TEST_G(MyTest, ConstructorWithGenerators) {
+    // コンストラクタ引数として使用されるGENERATOR値
+    int val1 = GENERATOR(1, 2);
+    int val2 = GENERATOR(10, 20);
+    USE_GENERATOR();
+
+    TestObject objects[] = {
+        TestObject(val1, "test"),
+        TestObject(val2, "demo")
+    };
+
+    EXPECT_LT(objects[0].value, objects[1].value);
+    printf("配列オブジェクト: [0]={%d,%s}, [1]={%d,%s}\n",
+           objects[0].value, objects[0].name.c_str(),
+           objects[1].value, objects[1].name.c_str());
+}
+```
+
+### ポインタと動的メモリの操作
+
+#### オブジェクトへのポインタの生成
+```cpp
+TEST_G(MyTest, PointerGeneration) {
+    // 異なるオブジェクトへのポインタを生成
+    // 注: メモリ管理に注意してください
+    auto* ptr1 = GENERATOR(new TestObject(1, "最初"),
+                          new TestObject(2, "二番目"));
+    auto* ptr2 = GENERATOR(new TestObject(10, "十"),
+                          new TestObject(20, "二十"));
+    USE_GENERATOR();
+
+    EXPECT_LT(*ptr1, *ptr2);
+    printf("ポインタ: ptr1={%d, %s}, ptr2={%d, %s}\n",
+           ptr1->value, ptr1->name.c_str(),
+           ptr2->value, ptr2->name.c_str());
+
+    // クリーンアップ
+    delete ptr1;
+    delete ptr2;
+}
+```
+
+#### ネストされたGENERATOR呼び出し（高度）
+```cpp
+TEST_G(MyTest, NestedGenerators) {
+    // 複雑なネスト生成 - 各外部GENERATORに内部GENERATOR呼び出しが含まれる
+    int inner1 = GENERATOR(1, 2);
+    int inner2 = GENERATOR(3, 4);
+    int inner3 = GENERATOR(10, 20);
+    int inner4 = GENERATOR(30, 40);
+    USE_GENERATOR();
+
+    auto* obj1 = new TestObject(inner1, "最初");
+    auto* obj2 = new TestObject(inner3, "二番目");
+
+    EXPECT_LT(obj1->value, obj2->value);
+    printf("ネスト: obj1={%d}, obj2={%d}\n", obj1->value, obj2->value);
+
+    delete obj1;
+    delete obj2;
 }
 ```
 
 ### STLコンテナの操作
 
+#### コンテナのサイズと内容の生成
 ```cpp
 TEST_G(MyTest, STLContainers) {
     auto size = GENERATOR(1, 2, 3);
     auto multiplier = GENERATOR(10, 100);
     USE_GENERATOR();
-    
+
     std::vector<int> vec;
     for (int i = 0; i < size; ++i) {
         vec.push_back(i * multiplier);
     }
-    
+
     EXPECT_EQ(vec.size(), size);
-    printf("ベクター: サイズ=%d, 乗数=%d\n", size, multiplier);
+    if (!vec.empty()) {
+        EXPECT_EQ(vec.back(), (size - 1) * multiplier);
+    }
+
+    printf("ベクター: サイズ=%d, 乗数=%d, 要素=[", size, multiplier);
+    for (int v : vec) printf("%d ", v);
+    printf("]\n");
+}
+```
+
+#### 文字列の組み合わせ生成
+```cpp
+TEST_G(MyTest, StringCombinations) {
+    auto prefix_choice = GENERATOR(0, 1);
+    auto suffix_choice = GENERATOR(0, 1);
+    auto repeat = GENERATOR(1, 2);
+    USE_GENERATOR();
+
+    std::string prefix = prefix_choice ? "こんにちは" : "やあ";
+    std::string suffix = suffix_choice ? "世界" : "みんな";
+
+    std::string result;
+    for (int i = 0; i < repeat; ++i) {
+        if (i > 0) result += " ";
+        result += prefix + " " + suffix;
+    }
+
+    EXPECT_FALSE(result.empty());
+    printf("文字列: prefix='%s', suffix='%s', repeat=%d => '%s'\n",
+           prefix.c_str(), suffix.c_str(), repeat, result.c_str());
+}
+```
+
+### スマートポインタの操作
+
+#### unique_ptrとGENERATORの使用
+```cpp
+TEST_G(MyTest, SmartPointers) {
+    auto value1 = GENERATOR(1, 2);
+    auto value2 = GENERATOR(10, 20);
+    USE_GENERATOR();
+
+    auto ptr1 = std::make_unique<TestObject>(value1, "最初");
+    auto ptr2 = std::make_unique<TestObject>(value2, "二番目");
+
+    EXPECT_LT(*ptr1, *ptr2);
+    printf("スマートポインタ: ptr1={%d, %s}, ptr2={%d, %s}\n",
+           ptr1->value, ptr1->name.c_str(),
+           ptr2->value, ptr2->name.c_str());
+}
+```
+
+### 複雑な構造体の例
+
+#### 複数のフィールドを持つ構造体の生成
+```cpp
+struct Point {
+    int x, y;
+    Point(int x_, int y_) : x(x_), y(y_) {}
+};
+
+TEST_G(MyTest, StructGeneration) {
+    auto p1 = GENERATOR(Point{0, 0}, Point{1, 1});
+    auto p2 = GENERATOR(Point{10, 10}, Point{20, 20});
+    USE_GENERATOR();
+
+    int distance = abs(p2.x - p1.x) + abs(p2.y - p1.y);
+    EXPECT_GT(distance, 0);
+    printf("点: p1=(%d,%d), p2=(%d,%d), 距離=%d\n",
+           p1.x, p1.y, p2.x, p2.y, distance);
 }
 ```
 

@@ -25,16 +25,8 @@ public:
     SecretKeeper() = default;
     SecretKeeper(int val) : secret_value_(val) {}
 
-    // Add friend access for specific tests
-    GTESTG_FRIEND_TEST(SecretKeeperTest, AccessPrivateMembers);
-    GTESTG_FRIEND_TEST(SecretKeeperTest, ModifyPrivateMembers);
-    GTESTG_FRIEND_TEST(SecretKeeperTest, CallPrivateMethods);
-    GTESTG_FRIEND_TEST(SecretKeeperTest, AccessStaticPrivateMembers);
-    GTESTG_FRIEND_TEST(SecretKeeperTest, MultipleObjects);
-    GTESTG_FRIEND_TEST(DerivedTest, AccessDerivedAndBasePrivates);  // For derived class test
-    // For generator tests
-    GTESTG_FRIEND_TEST_G(SecretGeneratorTest, GeneratorWithPrivateAccess);
-    GTESTG_FRIEND_TEST_G(SecretGeneratorTest, MultipleGeneratorsWithPrivate);
+    // Grant friend access - enables both TEST_FRIEND and GTESTG_PRIVATE_MEMBER approaches
+    GTESTG_FRIEND_ACCESS_PRIVATE();
 
     // Public interface
     int getPublicValue() const { return 100; }
@@ -54,9 +46,8 @@ private:
 public:
     ComplexPrivate() = default;
 
-    // Grant friend access to tests
-    GTESTG_FRIEND_TEST(ComplexPrivateTest, AccessComplexPrivateData);
-    GTESTG_FRIEND_TEST_G(AlignedPrivateTest, AlignedModeWithPrivate);
+    // Grant friend access - enables both TEST_FRIEND and GTESTG_PRIVATE_MEMBER approaches
+    GTESTG_FRIEND_ACCESS_PRIVATE();
 
     size_t getSize() const { return private_data_.size(); }
 };
@@ -205,8 +196,8 @@ struct AlignedPrivateTest : ::gtest_generator::TestWithGenerator {
 // Suppress the uninstantiated test warning - this test uses generator counting
 GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(AlignedPrivateTest__AlignedModeWithPrivate);
 
-// Using TEST_G instead of TEST_G_FRIEND since TEST_G_FRIEND just maps to TEST_G
-TEST_G(AlignedPrivateTest, AlignedModeWithPrivate) {
+// Using TEST_G_FRIEND to get private access via GTESTG_FRIEND_ACCESS_PRIVATE()
+TEST_G_FRIEND(AlignedPrivateTest, AlignedModeWithPrivate) {
     USE_GENERATOR(ALIGNED);
 
     auto index = GENERATOR(0, 1, 2, 3, 4);
@@ -271,8 +262,8 @@ class DerivedSecret : public SecretKeeper {
 public:
     DerivedSecret() : SecretKeeper(55) {}
 
-    // Derived class also needs to grant access if it has its own privates
-    GTESTG_FRIEND_TEST(DerivedTest, AccessDerivedAndBasePrivates);
+    // Grant friend access - enables both TEST_FRIEND and GTESTG_PRIVATE_MEMBER approaches
+    GTESTG_FRIEND_ACCESS_PRIVATE();
 
 private:
     int derived_secret_ = 88;

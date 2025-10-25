@@ -82,10 +82,48 @@ TEST_G(MyTest, AsymmetricCombinations) {
     int size = GENERATOR(1, 2, 3);     // 3 valori
     int scale = GENERATOR(10, 100);    // 2 valori
     USE_GENERATOR();
-    
+
     // Genera 6 combinazioni di test
     int result = size * scale;
     EXPECT_GT(result, 0);
+}
+```
+
+### Utilizzo di Valori Generati nelle Espressioni
+```cpp
+TEST_G(MyTest, ComputedValues) {
+    int base = GENERATOR(1, 2);
+    int multiplier = GENERATOR(10, 20, 30);
+    USE_GENERATOR();
+
+    std::vector<int> data;
+    for (int i = 0; i < base; ++i) {
+        data.push_back(i * multiplier);
+    }
+
+    EXPECT_EQ(data.size(), base);
+    if (!data.empty()) {
+        EXPECT_EQ(data.back(), (base - 1) * multiplier);
+    }
+}
+```
+
+### Logica di Test Complessa
+```cpp
+TEST_G(MyTest, ConditionalLogic) {
+    int mode = GENERATOR(0, 1, 2);     // 3 modalità
+    int value = GENERATOR(100, 200);   // 2 valori
+    USE_GENERATOR();
+
+    int result;
+    switch (mode) {
+        case 0: result = value + 10; break;
+        case 1: result = value * 2; break;
+        case 2: result = value - 50; break;
+    }
+
+    EXPECT_GT(result, 0);
+    printf("Modalità %d con valore %d produce risultato %d\n", mode, value, result);
 }
 ```
 
@@ -93,6 +131,7 @@ TEST_G(MyTest, AsymmetricCombinations) {
 
 ### Lavorare con Classi e Oggetti
 
+#### Generazione Diretta di Oggetti
 ```cpp
 class TestObject {
 public:
@@ -109,29 +148,164 @@ TEST_G(MyTest, ObjectGeneration) {
     auto obj1 = GENERATOR(TestObject(1, "primo"), TestObject(2, "secondo"));
     auto obj2 = GENERATOR(TestObject(10, "dieci"), TestObject(20, "venti"));
     USE_GENERATOR();
-    
+
     EXPECT_LT(obj1, obj2);
-    printf("Oggetti: obj1={%d, %s}, obj2={%d, %s}\n", 
-           obj1.value, obj1.name.c_str(), 
+    printf("Oggetti: obj1={%d, %s}, obj2={%d, %s}\n",
+           obj1.value, obj1.name.c_str(),
            obj2.value, obj2.name.c_str());
 }
 ```
 
-### Lavorare con Container STL
+#### Uso di GENERATOR negli Argomenti del Costruttore
+```cpp
+TEST_G(MyTest, ConstructorWithGenerators) {
+    // Valori GENERATOR usati come argomenti del costruttore
+    int val1 = GENERATOR(1, 2);
+    int val2 = GENERATOR(10, 20);
+    USE_GENERATOR();
 
+    TestObject objects[] = {
+        TestObject(val1, "test"),
+        TestObject(val2, "demo")
+    };
+
+    EXPECT_LT(objects[0].value, objects[1].value);
+    printf("Oggetti array: [0]={%d,%s}, [1]={%d,%s}\n",
+           objects[0].value, objects[0].name.c_str(),
+           objects[1].value, objects[1].name.c_str());
+}
+```
+
+### Lavorare con Puntatori e Memoria Dinamica
+
+#### Generazione di Puntatori a Oggetti
+```cpp
+TEST_G(MyTest, PointerGeneration) {
+    // Generare puntatori a oggetti diversi
+    // Nota: Prestare attenzione alla gestione della memoria
+    auto* ptr1 = GENERATOR(new TestObject(1, "primo"),
+                          new TestObject(2, "secondo"));
+    auto* ptr2 = GENERATOR(new TestObject(10, "dieci"),
+                          new TestObject(20, "venti"));
+    USE_GENERATOR();
+
+    EXPECT_LT(*ptr1, *ptr2);
+    printf("Puntatori: ptr1={%d, %s}, ptr2={%d, %s}\n",
+           ptr1->value, ptr1->name.c_str(),
+           ptr2->value, ptr2->name.c_str());
+
+    // Pulizia
+    delete ptr1;
+    delete ptr2;
+}
+```
+
+#### Chiamate GENERATOR Annidate (Avanzato)
+```cpp
+TEST_G(MyTest, NestedGenerators) {
+    // Generazione annidata complessa - ogni GENERATOR esterno contiene chiamate GENERATOR interne
+    int inner1 = GENERATOR(1, 2);
+    int inner2 = GENERATOR(3, 4);
+    int inner3 = GENERATOR(10, 20);
+    int inner4 = GENERATOR(30, 40);
+    USE_GENERATOR();
+
+    auto* obj1 = new TestObject(inner1, "primo");
+    auto* obj2 = new TestObject(inner3, "secondo");
+
+    EXPECT_LT(obj1->value, obj2->value);
+    printf("Annidato: obj1={%d}, obj2={%d}\n", obj1->value, obj2->value);
+
+    delete obj1;
+    delete obj2;
+}
+```
+
+### Lavorare con Contenitori STL
+
+#### Generazione di Dimensioni e Contenuti dei Contenitori
 ```cpp
 TEST_G(MyTest, STLContainers) {
     auto size = GENERATOR(1, 2, 3);
     auto multiplier = GENERATOR(10, 100);
     USE_GENERATOR();
-    
+
     std::vector<int> vec;
     for (int i = 0; i < size; ++i) {
         vec.push_back(i * multiplier);
     }
-    
+
     EXPECT_EQ(vec.size(), size);
-    printf("Vettore: dimensione=%d, moltiplicatore=%d\n", size, multiplier);
+    if (!vec.empty()) {
+        EXPECT_EQ(vec.back(), (size - 1) * multiplier);
+    }
+
+    printf("Vettore: dimensione=%d, moltiplicatore=%d, elementi=[", size, multiplier);
+    for (int v : vec) printf("%d ", v);
+    printf("]\n");
+}
+```
+
+#### Generazione di Combinazioni di Stringhe
+```cpp
+TEST_G(MyTest, StringCombinations) {
+    auto prefix_choice = GENERATOR(0, 1);
+    auto suffix_choice = GENERATOR(0, 1);
+    auto repeat = GENERATOR(1, 2);
+    USE_GENERATOR();
+
+    std::string prefix = prefix_choice ? "Ciao" : "Salve";
+    std::string suffix = suffix_choice ? "Mondo" : "Tutti";
+
+    std::string result;
+    for (int i = 0; i < repeat; ++i) {
+        if (i > 0) result += " ";
+        result += prefix + " " + suffix;
+    }
+
+    EXPECT_FALSE(result.empty());
+    printf("Stringa: prefix='%s', suffix='%s', repeat=%d => '%s'\n",
+           prefix.c_str(), suffix.c_str(), repeat, result.c_str());
+}
+```
+
+### Lavorare con Puntatori Intelligenti
+
+#### Uso di unique_ptr con GENERATOR
+```cpp
+TEST_G(MyTest, SmartPointers) {
+    auto value1 = GENERATOR(1, 2);
+    auto value2 = GENERATOR(10, 20);
+    USE_GENERATOR();
+
+    auto ptr1 = std::make_unique<TestObject>(value1, "primo");
+    auto ptr2 = std::make_unique<TestObject>(value2, "secondo");
+
+    EXPECT_LT(*ptr1, *ptr2);
+    printf("Puntatori intelligenti: ptr1={%d, %s}, ptr2={%d, %s}\n",
+           ptr1->value, ptr1->name.c_str(),
+           ptr2->value, ptr2->name.c_str());
+}
+```
+
+### Esempi di Strutture Complesse
+
+#### Generazione di Strutture con Campi Multipli
+```cpp
+struct Point {
+    int x, y;
+    Point(int x_, int y_) : x(x_), y(y_) {}
+};
+
+TEST_G(MyTest, StructGeneration) {
+    auto p1 = GENERATOR(Point{0, 0}, Point{1, 1});
+    auto p2 = GENERATOR(Point{10, 10}, Point{20, 20});
+    USE_GENERATOR();
+
+    int distance = abs(p2.x - p1.x) + abs(p2.y - p1.y);
+    EXPECT_GT(distance, 0);
+    printf("Punti: p1=(%d,%d), p2=(%d,%d), distanza=%d\n",
+           p1.x, p1.y, p2.x, p2.y, distance);
 }
 ```
 
@@ -613,6 +787,263 @@ TEST_G_FRIEND(WidgetGenTest, GeneratorTest) {
 
 **Supporto Multi-File:**
 `TEST_FRIEND` e `TEST_G_FRIEND` funzionano correttamente quando i test sono definiti in più file .cpp collegati allo stesso eseguibile, proprio come `TEST_G` regolare. Vedere `test_friend_multi_file1.cpp` e `test_friend_multi_file2.cpp` per esempi.
+
+### Sistema Unificato di Accesso ai Membri Privati
+
+La libreria fornisce un sistema unificato per accedere ai membri privati e protetti nei tuoi test. Aggiungendo una singola macro `GTESTG_FRIEND_ACCESS_PRIVATE()` alla tua classe, abiliti **due approcci complementari** per l'accesso ai membri privati:
+
+1. **Accesso Diretto tramite TEST_FRIEND/TEST_G_FRIEND** - Raccomandato per la maggior parte dei casi
+2. **Accesso Basato su Funzioni tramite macro GTESTG_PRIVATE_MEMBER** - Per un controllo più esplicito
+
+Entrambi gli approcci funzionano perfettamente insieme e possono essere utilizzati nello stesso test.
+
+#### Il Nucleo: GTESTG_FRIEND_ACCESS_PRIVATE()
+
+Aggiungi questa singola macro alla tua classe per abilitare l'accesso ai membri privati:
+
+```cpp
+class MyClass {
+private:
+    int privateValue = 42;
+    std::string privateName = "secret";
+public:
+    // One macro enables both access approaches
+    GTESTG_FRIEND_ACCESS_PRIVATE();
+};
+```
+
+Questa macro concede l'accesso friend a:
+- **Template VirtualAccessor** - Usato da TEST_FRIEND e TEST_G_FRIEND
+- **Funzione gtestg_private_accessMember** - Usata dalle macro GTESTG_PRIVATE_MEMBER
+
+#### Approccio 1: Usare TEST_FRIEND e TEST_G_FRIEND (Raccomandato)
+
+Per casi semplici, usa `TEST_FRIEND` o `TEST_G_FRIEND` per creare test che possono accedere direttamente ai membri privati:
+
+**Esempio con TEST_FRIEND:**
+```cpp
+struct WidgetTest : ::testing::Test {
+    Widget w;
+};
+
+TEST_FRIEND(WidgetTest, AccessPrivate) {
+    // Direct access to private members (via VirtualAccessor specialization)
+    EXPECT_EQ(w.secret_, 42);
+    w.secret_ = 100;
+    EXPECT_EQ(w.secret_, 100);
+}
+```
+
+**Esempio con TEST_G_FRIEND:**
+```cpp
+struct WidgetGenTest : ::gtest_generator::TestWithGenerator {
+    Widget w{999};
+};
+
+TEST_G_FRIEND(WidgetGenTest, GeneratorTest) {
+    int factor = GENERATOR(1, 2, 5);
+    USE_GENERATOR();
+
+    // Direct access works in parameterized tests too
+    EXPECT_EQ(w.secret_, 999);
+    printf("factor=%d, secret=%d\n", factor, w.secret_);
+}
+```
+
+**Supporto Multi-File:**
+`TEST_FRIEND` e `TEST_G_FRIEND` funzionano correttamente quando i test sono definiti in più file .cpp collegati allo stesso eseguibile. Vedere `test_friend_multi_file1.cpp` e `test_friend_multi_file2.cpp` per esempi.
+
+**Come Funziona:**
+- `TEST_FRIEND` e `TEST_G_FRIEND` creano una specializzazione template esplicita di `VirtualAccessor<Suite, TestName>` all'interno del namespace `gtestg_detail`
+- Questa specializzazione ottiene l'accesso friend tramite `GTESTG_FRIEND_ACCESS_PRIVATE()`
+- Poiché `VirtualAccessor` è un friend e deriva dalla tua fixture di test, può accedere ai membri privati della classe target
+- Il corpo del test viene eseguito all'interno del contesto di questa classe friend, abilitando l'accesso diretto ai membri privati
+- Ogni test ottiene un tipo tag unico per creare una specializzazione separata, evitando conflitti di nomi
+
+#### Approccio 2: Usare le Macro GTESTG_PRIVATE_MEMBER (Controllo Esplicito)
+
+Per maggiore controllo o quando lavori con le macro regolari `TEST_F`/`TEST_G`, usa le macro accessor basate su funzioni. Questo approccio richiede di dichiarare l'accesso per ogni membro che vuoi accedere.
+
+**Passo 1: Dichiarare l'accesso fuori dalla tua classe (nel file di test):**
+```cpp
+// Declare which members you want to access
+GTESTG_PRIVATE_DECLARE_MEMBER(Widget, secret_);
+GTESTG_PRIVATE_DECLARE_MEMBER(Widget, privateName);
+```
+
+**Passo 2: Accedere ai membri nei tuoi test:**
+```cpp
+TEST_FRIEND(WidgetTest, AccessPrivate) {
+    // Access using the macro
+    int& secret = GTESTG_PRIVATE_MEMBER(Widget, secret_, &w);
+    EXPECT_EQ(secret, 42);
+    secret = 100;
+    EXPECT_EQ(secret, 100);
+}
+```
+
+Questo approccio è utile quando:
+- Vuoi documentazione esplicita di quali membri vengono acceduti
+- Devi accedere a membri statici
+- Vuoi funzioni accessor personalizzate con logica aggiuntiva
+
+#### Combinare Entrambi gli Approcci
+
+Puoi usare entrambi gli approcci nello stesso test:
+
+```cpp
+class Widget {
+private:
+    int secret_ = 42;
+    static int counter_;
+public:
+    GTESTG_FRIEND_ACCESS_PRIVATE();  // Enables both approaches
+};
+
+int Widget::counter_ = 0;
+
+// Declare access for static member
+GTESTG_PRIVATE_DECLARE_STATIC(Widget, counter_);
+
+TEST_G_FRIEND(WidgetTest, CombinedAccess) {
+    int value = GENERATOR(10, 20);
+    USE_GENERATOR();
+
+    Widget w;
+
+    // Approach 1: Direct access to instance member
+    w.secret_ = value;
+    EXPECT_EQ(w.secret_, value);
+
+    // Approach 2: Use macro for static member
+    int& count = GTESTG_PRIVATE_STATIC(Widget, counter_);
+    count++;
+}
+```
+
+### Riferimento Completo dell'API per le Macro GTESTG_PRIVATE_MEMBER
+
+Questa sezione fornisce un riferimento dettagliato per le macro di accesso ai membri privati basate su funzioni (Approccio 2).
+
+#### Dichiarare l'Accesso ai Membri
+
+Posiziona queste dichiarazioni **fuori** dalla tua classe, tipicamente nel tuo file di test. Queste dichiarazioni informano il sistema quali membri privati vuoi accedere:
+
+| Macro | Scopo | Parametri | Esempio |
+|-------|-------|-----------|---------|
+| `GTESTG_PRIVATE_DECLARE_MEMBER` | Dichiarare l'accesso ai membri di istanza | Target, MemberName | `GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateField)` |
+| `GTESTG_PRIVATE_DECLARE_STATIC` | Dichiarare l'accesso ai membri statici | Target, MemberName | `GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter)` |
+| `GTESTG_PRIVATE_DECLARE_FUNCTION` | Dichiarare una funzione accessor personalizzata | ThisClass, Target, FuncName | `GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum)` |
+
+#### Macro per Accedere ai Membri
+
+Usa queste macro **all'interno** delle tue funzioni di test per accedere ai membri privati:
+
+| Macro | Scopo | Parametri | Esempio |
+|-------|-------|-----------|---------|
+| `GTESTG_PRIVATE_MEMBER` | Accedere a un membro di istanza | Target, MemberName, &obj | `GTESTG_PRIVATE_MEMBER(MyClass, privateField, &obj)` |
+| `GTESTG_PRIVATE_STATIC` | Accedere a un membro statico | Target, MemberName | `GTESTG_PRIVATE_STATIC(MyClass, staticCounter)` |
+| `GTESTG_PRIVATE_CALL` | Chiamare una funzione personalizzata con oggetto test esplicito | Target, FuncName, test_obj, &obj | `GTESTG_PRIVATE_CALL(MyClass, GetSum, this, &obj)` |
+| `GTESTG_PRIVATE_CALL_ON_TEST` | Chiamare una funzione personalizzata (usa 'this' implicito) | ThisClass, Target, FuncName, &obj | `GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj)` |
+
+#### Esempi di Utilizzo Dettagliati
+
+I seguenti esempi dimostrano modelli di utilizzo completi per le macro GTESTG_PRIVATE_*.
+
+**Esempio 1: Accedere ai Membri di Istanza**
+```cpp
+class MyClass {
+private:
+    int privateValue = 42;
+    std::string privateName = "secret";
+public:
+    GTESTG_FRIEND_ACCESS_PRIVATE();
+};
+
+// Declare access (in test file)
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateValue);
+GTESTG_PRIVATE_DECLARE_MEMBER(MyClass, privateName);
+
+TEST_G(MyTest, AccessPrivate) {
+    int value = GENERATOR(10, 20, 30);
+    USE_GENERATOR();
+
+    MyClass obj;
+
+    // Access and modify private members
+    int& val = GTESTG_PRIVATE_MEMBER(MyClass, privateValue, &obj);
+    EXPECT_EQ(val, 42);
+    val = value;  // Can modify
+    EXPECT_EQ(val, value);
+
+    std::string& name = GTESTG_PRIVATE_MEMBER(MyClass, privateName, &obj);
+    EXPECT_EQ(name, "secret");
+    name = "modified";
+}
+```
+
+**Esempio 2: Accedere ai Membri Statici**
+```cpp
+class MyClass {
+private:
+    static int staticCounter;
+public:
+    GTESTG_FRIEND_ACCESS_PRIVATE();
+};
+
+int MyClass::staticCounter = 100;
+
+// Declare access to static member
+GTESTG_PRIVATE_DECLARE_STATIC(MyClass, staticCounter);
+
+TEST_G(MyTest, AccessStatic) {
+    USE_GENERATOR();
+
+    // Access static member (no object needed)
+    int& count = GTESTG_PRIVATE_STATIC(MyClass, staticCounter);
+    EXPECT_EQ(count, 100);
+    count = 200;  // Can modify
+    EXPECT_EQ(count, 200);
+}
+```
+
+**Esempio 3: Funzioni Accessor Personalizzate**
+```cpp
+class MyClass {
+private:
+    int field1 = 10;
+    int field2 = 20;
+public:
+    GTESTG_FRIEND_ACCESS_PRIVATE();
+};
+
+class MyTest : public ::gtest_generator::TestWithGenerator {};
+
+// Declare custom function with access to both test context and private members
+// THIS = test object, TARGET = object being accessed
+GTESTG_PRIVATE_DECLARE_FUNCTION(MyTest, MyClass, GetSum) {
+    // Can access test context: THIS->GetParam()
+    // Can access private members: TARGET->field1, TARGET->field2
+    return TARGET->field1 + TARGET->field2;
+}
+
+TEST_G(MyTest, CustomFunction) {
+    int multiplier = GENERATOR(1, 2, 3);
+    USE_GENERATOR();
+
+    MyClass obj;
+
+    // Call custom function using CALL_ON_TEST (uses implicit 'this')
+    int sum = GTESTG_PRIVATE_CALL_ON_TEST(MyTest, MyClass, GetSum, &obj);
+    EXPECT_EQ(sum, 30);  // 10 + 20
+
+    // Alternative: Pass test object explicitly
+    int sum2 = GTESTG_PRIVATE_CALL(MyClass, GetSum, static_cast<MyTest*>(this), &obj);
+    EXPECT_EQ(sum2, 30);
+}
+```
+
+Per esempi completi, vedere `test_private_access.cpp` e `test_define_macros.cpp`.
 
 ## Macro di Confronto Array
 

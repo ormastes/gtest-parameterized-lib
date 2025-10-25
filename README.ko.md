@@ -82,10 +82,48 @@ TEST_G(MyTest, AsymmetricCombinations) {
     int size = GENERATOR(1, 2, 3);     // 3개 값
     int scale = GENERATOR(10, 100);    // 2개 값
     USE_GENERATOR();
-    
+
     // 6개의 테스트 조합 생성
     int result = size * scale;
     EXPECT_GT(result, 0);
+}
+```
+
+### 표현식에서 생성된 값 사용
+```cpp
+TEST_G(MyTest, ComputedValues) {
+    int base = GENERATOR(1, 2);
+    int multiplier = GENERATOR(10, 20, 30);
+    USE_GENERATOR();
+
+    std::vector<int> data;
+    for (int i = 0; i < base; ++i) {
+        data.push_back(i * multiplier);
+    }
+
+    EXPECT_EQ(data.size(), base);
+    if (!data.empty()) {
+        EXPECT_EQ(data.back(), (base - 1) * multiplier);
+    }
+}
+```
+
+### 복잡한 테스트 로직
+```cpp
+TEST_G(MyTest, ConditionalLogic) {
+    int mode = GENERATOR(0, 1, 2);     // 3가지 모드
+    int value = GENERATOR(100, 200);   // 2개 값
+    USE_GENERATOR();
+
+    int result;
+    switch (mode) {
+        case 0: result = value + 10; break;
+        case 1: result = value * 2; break;
+        case 2: result = value - 50; break;
+    }
+
+    EXPECT_GT(result, 0);
+    printf("모드 %d에 값 %d를 적용한 결과 %d\n", mode, value, result);
 }
 ```
 
@@ -93,6 +131,7 @@ TEST_G(MyTest, AsymmetricCombinations) {
 
 ### 클래스와 객체 작업
 
+#### 직접 객체 생성
 ```cpp
 class TestObject {
 public:
@@ -109,29 +148,164 @@ TEST_G(MyTest, ObjectGeneration) {
     auto obj1 = GENERATOR(TestObject(1, "첫번째"), TestObject(2, "두번째"));
     auto obj2 = GENERATOR(TestObject(10, "열"), TestObject(20, "스물"));
     USE_GENERATOR();
-    
+
     EXPECT_LT(obj1, obj2);
-    printf("객체: obj1={%d, %s}, obj2={%d, %s}\n", 
-           obj1.value, obj1.name.c_str(), 
+    printf("객체: obj1={%d, %s}, obj2={%d, %s}\n",
+           obj1.value, obj1.name.c_str(),
            obj2.value, obj2.name.c_str());
+}
+```
+
+#### 생성자 인수에서 GENERATOR 사용
+```cpp
+TEST_G(MyTest, ConstructorWithGenerators) {
+    // 생성자 인수로 사용되는 GENERATOR 값
+    int val1 = GENERATOR(1, 2);
+    int val2 = GENERATOR(10, 20);
+    USE_GENERATOR();
+
+    TestObject objects[] = {
+        TestObject(val1, "test"),
+        TestObject(val2, "demo")
+    };
+
+    EXPECT_LT(objects[0].value, objects[1].value);
+    printf("배열 객체: [0]={%d,%s}, [1]={%d,%s}\n",
+           objects[0].value, objects[0].name.c_str(),
+           objects[1].value, objects[1].name.c_str());
+}
+```
+
+### 포인터와 동적 메모리 작업
+
+#### 객체에 대한 포인터 생성
+```cpp
+TEST_G(MyTest, PointerGeneration) {
+    // 다른 객체에 대한 포인터 생성
+    // 참고: 메모리 관리에 주의하세요
+    auto* ptr1 = GENERATOR(new TestObject(1, "첫번째"),
+                          new TestObject(2, "두번째"));
+    auto* ptr2 = GENERATOR(new TestObject(10, "열"),
+                          new TestObject(20, "스물"));
+    USE_GENERATOR();
+
+    EXPECT_LT(*ptr1, *ptr2);
+    printf("포인터: ptr1={%d, %s}, ptr2={%d, %s}\n",
+           ptr1->value, ptr1->name.c_str(),
+           ptr2->value, ptr2->name.c_str());
+
+    // 정리
+    delete ptr1;
+    delete ptr2;
+}
+```
+
+#### 중첩 GENERATOR 호출 (고급)
+```cpp
+TEST_G(MyTest, NestedGenerators) {
+    // 복잡한 중첩 생성 - 각 외부 GENERATOR에 내부 GENERATOR 호출이 포함됨
+    int inner1 = GENERATOR(1, 2);
+    int inner2 = GENERATOR(3, 4);
+    int inner3 = GENERATOR(10, 20);
+    int inner4 = GENERATOR(30, 40);
+    USE_GENERATOR();
+
+    auto* obj1 = new TestObject(inner1, "첫번째");
+    auto* obj2 = new TestObject(inner3, "두번째");
+
+    EXPECT_LT(obj1->value, obj2->value);
+    printf("중첩: obj1={%d}, obj2={%d}\n", obj1->value, obj2->value);
+
+    delete obj1;
+    delete obj2;
 }
 ```
 
 ### STL 컨테이너 작업
 
+#### 컨테이너 크기 및 내용 생성
 ```cpp
 TEST_G(MyTest, STLContainers) {
     auto size = GENERATOR(1, 2, 3);
     auto multiplier = GENERATOR(10, 100);
     USE_GENERATOR();
-    
+
     std::vector<int> vec;
     for (int i = 0; i < size; ++i) {
         vec.push_back(i * multiplier);
     }
-    
+
     EXPECT_EQ(vec.size(), size);
-    printf("벡터: 크기=%d, 배수=%d\n", size, multiplier);
+    if (!vec.empty()) {
+        EXPECT_EQ(vec.back(), (size - 1) * multiplier);
+    }
+
+    printf("벡터: 크기=%d, 배수=%d, 요소=[", size, multiplier);
+    for (int v : vec) printf("%d ", v);
+    printf("]\n");
+}
+```
+
+#### 문자열 조합 생성
+```cpp
+TEST_G(MyTest, StringCombinations) {
+    auto prefix_choice = GENERATOR(0, 1);
+    auto suffix_choice = GENERATOR(0, 1);
+    auto repeat = GENERATOR(1, 2);
+    USE_GENERATOR();
+
+    std::string prefix = prefix_choice ? "안녕" : "하이";
+    std::string suffix = suffix_choice ? "세계" : "여러분";
+
+    std::string result;
+    for (int i = 0; i < repeat; ++i) {
+        if (i > 0) result += " ";
+        result += prefix + " " + suffix;
+    }
+
+    EXPECT_FALSE(result.empty());
+    printf("문자열: prefix='%s', suffix='%s', repeat=%d => '%s'\n",
+           prefix.c_str(), suffix.c_str(), repeat, result.c_str());
+}
+```
+
+### 스마트 포인터 작업
+
+#### unique_ptr과 GENERATOR 사용
+```cpp
+TEST_G(MyTest, SmartPointers) {
+    auto value1 = GENERATOR(1, 2);
+    auto value2 = GENERATOR(10, 20);
+    USE_GENERATOR();
+
+    auto ptr1 = std::make_unique<TestObject>(value1, "첫번째");
+    auto ptr2 = std::make_unique<TestObject>(value2, "두번째");
+
+    EXPECT_LT(*ptr1, *ptr2);
+    printf("스마트 포인터: ptr1={%d, %s}, ptr2={%d, %s}\n",
+           ptr1->value, ptr1->name.c_str(),
+           ptr2->value, ptr2->name.c_str());
+}
+```
+
+### 복잡한 구조체 예제
+
+#### 여러 필드가 있는 구조체 생성
+```cpp
+struct Point {
+    int x, y;
+    Point(int x_, int y_) : x(x_), y(y_) {}
+};
+
+TEST_G(MyTest, StructGeneration) {
+    auto p1 = GENERATOR(Point{0, 0}, Point{1, 1});
+    auto p2 = GENERATOR(Point{10, 10}, Point{20, 20});
+    USE_GENERATOR();
+
+    int distance = abs(p2.x - p1.x) + abs(p2.y - p1.y);
+    EXPECT_GT(distance, 0);
+    printf("점: p1=(%d,%d), p2=(%d,%d), 거리=%d\n",
+           p1.x, p1.y, p2.x, p2.y, distance);
 }
 ```
 

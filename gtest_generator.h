@@ -14,12 +14,6 @@
 #ifndef GTESTG_FRIEND_INFRA_INCLUDED
 #define GTESTG_FRIEND_INFRA_INCLUDED
 
-// VirtualAccessor template (universal, works with TEST_FRIEND/TEST_G_FRIEND)
-namespace gtestg_detail {
-template <typename Suite, typename Tag>
-struct VirtualAccessor : public Suite {};
-}
-
 // Token concat helper
 #ifndef GTESTG_CONCAT
 #  define GTESTG_CONCAT_INNER(a, b) a##b
@@ -114,6 +108,11 @@ struct VirtualAccessor : public Suite {};
 template <typename ID, typename TestCase, typename Target>
 auto gtestg_private_accessMember(TestCase* test_case, Target* target = nullptr) -> decltype(auto);
 
+// VirtualAccessor template (universal, works with TEST_FRIEND/TEST_G_FRIEND)
+namespace gtestg_detail {
+template <typename Suite, typename Tag>
+struct VirtualAccessor : public Suite {};
+}
 
 // Unified macro that grants friend access for ALL approaches:
 // - VirtualAccessor template (for TEST_FRIEND, TEST_G_FRIEND)

@@ -65,18 +65,18 @@
 // If you need tests in a namespace, use TEST_G with GTESTG_PRIVATE_MEMBER macros instead.
 #define TEST_G_FRIEND(Suite, TestName)                                                    \
     namespace gtestg_detail {                                                             \
-    struct TestName##Tag{};                                                               \
-    template<> struct VirtualAccessor<Suite, TestName##Tag>                              \
+    struct Suite##TestName{};                                                             \
+    template<> struct VirtualAccessor<Suite, Suite##TestName>                            \
         : public Suite {                                                                  \
      public:                                                                              \
       VirtualAccessor() {}                                                                \
       void TestBody() override;                                                           \
     };                                                                                    \
     }                                                                                     \
-    class Suite##__##TestName##__FriendTest : public ::gtestg_detail::VirtualAccessor<Suite, ::gtestg_detail::TestName##Tag> { \
+    class Suite##__##TestName##__FriendTest : public ::gtestg_detail::VirtualAccessor<Suite, ::gtestg_detail::Suite##TestName> { \
      public:                                                                              \
       void TestBody() override {                                                          \
-        ::gtestg_detail::VirtualAccessor<Suite, ::gtestg_detail::TestName##Tag>::TestBody(); \
+        ::gtestg_detail::VirtualAccessor<Suite, ::gtestg_detail::Suite##TestName>::TestBody(); \
       }                                                                                   \
     };                                                                                    \
     inline gtest_generator::DynamicRangeGenerator* __gtest_generator__get_generator_##Suite##TestName() { \
@@ -86,9 +86,9 @@
     INSTANTIATE_TEST_SUITE_P(Generator, Suite##__##TestName##__FriendTest,               \
         testing::internal::ParamGenerator<int>(__gtest_generator__get_generator_##Suite##TestName())); \
     TEST_P(Suite##__##TestName##__FriendTest, __) {                                      \
-        ::gtestg_detail::VirtualAccessor<Suite, ::gtestg_detail::TestName##Tag>::TestBody(); \
+        ::gtestg_detail::VirtualAccessor<Suite, ::gtestg_detail::Suite##TestName>::TestBody(); \
     }                                                                                     \
-    void ::gtestg_detail::VirtualAccessor<Suite, ::gtestg_detail::TestName##Tag>::TestBody()
+    void ::gtestg_detail::VirtualAccessor<Suite, ::gtestg_detail::Suite##TestName>::TestBody()
 
 
 // Template function declaration (prevent multiple definition with #ifdef)

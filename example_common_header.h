@@ -13,7 +13,7 @@
 #ifndef GTEST_GENERATOR_ACCESS_PRIVATE_MEMBER_DEFINED
 #define GTEST_GENERATOR_ACCESS_PRIVATE_MEMBER_DEFINED
 
-// VirtualAccessor for class-based friend access (TEST_FRIEND, TEST_G_FRIEND)
+// VirtualAccessor for class-based friend access (TEST_F_FRIEND, TEST_G_FRIEND)
 namespace gtestg_detail {
 template <class Suite, class Tag>
 class VirtualAccessor;
@@ -24,7 +24,7 @@ template <typename ID, typename TestCase, typename Target>
 auto gtestg_private_accessMember(TestCase* test_case, Target* target = nullptr) -> decltype(auto);
 
 // Unified macro that grants friend access for BOTH approaches:
-// - Class-based: VirtualAccessor (for TEST_FRIEND, TEST_G_FRIEND)
+// - Class-based: VirtualAccessor (for TEST_F_FRIEND, TEST_G_FRIEND)
 // - Function-based: gtestg_private_accessMember (for GTESTG_PRIVATE_MEMBER macros)
 // Usage: Place inside the target class definition
 // In test builds: Grants friend access to test infrastructure

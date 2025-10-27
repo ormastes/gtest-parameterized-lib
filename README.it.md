@@ -560,13 +560,13 @@ struct MyClassTest : ::testing::Test {
     MyClass obj{42, "secret"};
 };
 
-TEST_FRIEND(MyClassTest, AccessPrivateMembers) {
+TEST_F_FRIEND(MyClassTest, AccessPrivateMembers) {
     // Accesso diretto ai membri privati!
     EXPECT_EQ(obj.privateValue, 42);
     EXPECT_EQ(obj.privateName, "secret");
 }
 
-TEST_FRIEND(MyClassTest, ModifyPrivateMembers) {
+TEST_F_FRIEND(MyClassTest, ModifyPrivateMembers) {
     // Può modificare i membri privati
     obj.privateValue = 100;
     EXPECT_EQ(obj.privateValue, 100);
@@ -599,7 +599,7 @@ TEST_FRIEND(MyClassTest, ModifyPrivateMembers) {
 
 | Macro | Scopo | Utilizzo |
 |-------|---------|-------|
-| `TEST_FRIEND(Suite, TestName)` | Definisci un test con accesso friend | Come TEST_F |
+| `TEST_F_FRIEND(Suite, TestName)` | Definisci un test con accesso friend | Come TEST_F |
 | `TEST_G_FRIEND(TestClassName, TestName)` | Definisci un test generatore con accesso friend | Come TEST_G |
 
 ### Esempi d'Uso
@@ -620,7 +620,7 @@ struct WidgetTest : ::testing::Test {
     Widget w;
 };
 
-TEST_FRIEND(WidgetTest, CheckSecret) {
+TEST_F_FRIEND(WidgetTest, CheckSecret) {
     EXPECT_EQ(w.secret_, 42);  // Accesso diretto al membro privato
 }
 ```
@@ -701,7 +701,7 @@ struct DerivedTest : ::testing::Test {
     Derived d;
 };
 
-TEST_FRIEND(DerivedTest, AccessBoth) {
+TEST_F_FRIEND(DerivedTest, AccessBoth) {
     EXPECT_EQ(d.base_secret_, 10);     // Accesso al privato della base
     EXPECT_EQ(d.derived_secret_, 20);  // Accesso al privato della derivata
 }
@@ -711,7 +711,7 @@ TEST_FRIEND(DerivedTest, AccessBoth) {
 
 1. **Richiesta Concessione Esplicita**: Ogni test che necessita di accesso privato deve essere esplicitamente elencato nella classe target
 2. **Nessuna Magia**: Usa dichiarazioni friend standard di C++ - semplice e prevedibile
-3. **TEST_FRIEND è Opzionale**: `TEST_FRIEND` è solo una macro di convenienza che mappa a `TEST_F`. Puoi usare `TEST_F` normale se la classe ha la dichiarazione `GTESTG_FRIEND_TEST` appropriata
+3. **TEST_F_FRIEND è Opzionale**: `TEST_F_FRIEND` è solo una macro di convenienza che mappa a `TEST_F`. Puoi usare `TEST_F` normale se la classe ha la dichiarazione `GTESTG_FRIEND_TEST` appropriata
 4. **Sicurezza Compile-Time**: Se un test tenta di accedere a membri privati senza avere accesso friend concesso, otterrai un errore di compilazione
 5. **Manutenzione**: Quando aggiungi un nuovo test che necessita di accesso privato, ricorda di aggiungere la dichiarazione `GTESTG_FRIEND_TEST` corrispondente alla classe target
 
@@ -730,17 +730,17 @@ Evita di usare quando:
 
 Vedere `test_friend_access.cpp` per esempi completi.
 
-### Macro TEST_FRIEND e TEST_G_FRIEND
+### Macro TEST_F_FRIEND e TEST_G_FRIEND
 
-La libreria fornisce macro `TEST_FRIEND` e `TEST_G_FRIEND` che creano infrastruttura di test con supporto integrato per il pattern VirtualAccessor. Queste macro funzionano perfettamente con la dichiarazione `GTESTG_FRIEND_ACCESS_PRIVATE()`.
+La libreria fornisce macro `TEST_F_FRIEND` e `TEST_G_FRIEND` che creano infrastruttura di test con supporto integrato per il pattern VirtualAccessor. Queste macro funzionano perfettamente con la dichiarazione `GTESTG_FRIEND_ACCESS_PRIVATE()`.
 
 **Punti Chiave:**
 - `GTESTG_FRIEND_ACCESS_PRIVATE()` concede accesso friend per **entrambi** gli approcci basati su classi (VirtualAccessor) e basati su funzioni (gtestg_private_accessMember)
-- Usa `TEST_FRIEND` per test regolari in stile TEST_F
+- Usa `TEST_F_FRIEND` per test regolari in stile TEST_F
 - Usa `TEST_G_FRIEND` per test parametrizzati basati su generatori
 - Continua a usare macro `GTESTG_PRIVATE_MEMBER` per accedere ai membri privati
 
-**Esempio con TEST_FRIEND:**
+**Esempio con TEST_F_FRIEND:**
 ```cpp
 class Widget {
 private:
@@ -759,7 +759,7 @@ struct WidgetTest : ::testing::Test {
     Widget w;
 };
 
-TEST_FRIEND(WidgetTest, AccessPrivate) {
+TEST_F_FRIEND(WidgetTest, AccessPrivate) {
     // Accedere al membro privato usando l'accessor basato su funzioni
     int& secret = GTESTG_PRIVATE_MEMBER(Widget, secret_, &w);
     EXPECT_EQ(secret, 42);
@@ -786,13 +786,13 @@ TEST_G_FRIEND(WidgetGenTest, GeneratorTest) {
 ```
 
 **Supporto Multi-File:**
-`TEST_FRIEND` e `TEST_G_FRIEND` funzionano correttamente quando i test sono definiti in più file .cpp collegati allo stesso eseguibile, proprio come `TEST_G` regolare. Vedere `test_friend_multi_file1.cpp` e `test_friend_multi_file2.cpp` per esempi.
+`TEST_F_FRIEND` e `TEST_G_FRIEND` funzionano correttamente quando i test sono definiti in più file .cpp collegati allo stesso eseguibile, proprio come `TEST_G` regolare. Vedere `test_friend_multi_file1.cpp` e `test_friend_multi_file2.cpp` per esempi.
 
 ### Sistema Unificato di Accesso ai Membri Privati
 
 La libreria fornisce un sistema unificato per accedere ai membri privati e protetti nei tuoi test. Aggiungendo una singola macro `GTESTG_FRIEND_ACCESS_PRIVATE()` alla tua classe, abiliti **due approcci complementari** per l'accesso ai membri privati:
 
-1. **Accesso Diretto tramite TEST_FRIEND/TEST_G_FRIEND** - Raccomandato per la maggior parte dei casi
+1. **Accesso Diretto tramite TEST_F_FRIEND/TEST_G_FRIEND** - Raccomandato per la maggior parte dei casi
 2. **Accesso Basato su Funzioni tramite macro GTESTG_PRIVATE_MEMBER** - Per un controllo più esplicito
 
 Entrambi gli approcci funzionano perfettamente insieme e possono essere utilizzati nello stesso test.
@@ -813,20 +813,20 @@ public:
 ```
 
 Questa macro concede l'accesso friend a:
-- **Template VirtualAccessor** - Usato da TEST_FRIEND e TEST_G_FRIEND
+- **Template VirtualAccessor** - Usato da TEST_F_FRIEND e TEST_G_FRIEND
 - **Funzione gtestg_private_accessMember** - Usata dalle macro GTESTG_PRIVATE_MEMBER
 
-#### Approccio 1: Usare TEST_FRIEND e TEST_G_FRIEND (Raccomandato)
+#### Approccio 1: Usare TEST_F_FRIEND e TEST_G_FRIEND (Raccomandato)
 
-Per casi semplici, usa `TEST_FRIEND` o `TEST_G_FRIEND` per creare test che possono accedere direttamente ai membri privati:
+Per casi semplici, usa `TEST_F_FRIEND` o `TEST_G_FRIEND` per creare test che possono accedere direttamente ai membri privati:
 
-**Esempio con TEST_FRIEND:**
+**Esempio con TEST_F_FRIEND:**
 ```cpp
 struct WidgetTest : ::testing::Test {
     Widget w;
 };
 
-TEST_FRIEND(WidgetTest, AccessPrivate) {
+TEST_F_FRIEND(WidgetTest, AccessPrivate) {
     // Direct access to private members (via VirtualAccessor specialization)
     EXPECT_EQ(w.secret_, 42);
     w.secret_ = 100;
@@ -851,10 +851,10 @@ TEST_G_FRIEND(WidgetGenTest, GeneratorTest) {
 ```
 
 **Supporto Multi-File:**
-`TEST_FRIEND` e `TEST_G_FRIEND` funzionano correttamente quando i test sono definiti in più file .cpp collegati allo stesso eseguibile. Vedere `test_friend_multi_file1.cpp` e `test_friend_multi_file2.cpp` per esempi.
+`TEST_F_FRIEND` e `TEST_G_FRIEND` funzionano correttamente quando i test sono definiti in più file .cpp collegati allo stesso eseguibile. Vedere `test_friend_multi_file1.cpp` e `test_friend_multi_file2.cpp` per esempi.
 
 **Come Funziona:**
-- `TEST_FRIEND` e `TEST_G_FRIEND` creano una specializzazione template esplicita di `VirtualAccessor<Suite, TestName>` all'interno del namespace `gtestg_detail`
+- `TEST_F_FRIEND` e `TEST_G_FRIEND` creano una specializzazione template esplicita di `VirtualAccessor<Suite, TestName>` all'interno del namespace `gtestg_detail`
 - Questa specializzazione ottiene l'accesso friend tramite `GTESTG_FRIEND_ACCESS_PRIVATE()`
 - Poiché `VirtualAccessor` è un friend e deriva dalla tua fixture di test, può accedere ai membri privati della classe target
 - Il corpo del test viene eseguito all'interno del contesto di questa classe friend, abilitando l'accesso diretto ai membri privati
@@ -873,7 +873,7 @@ GTESTG_PRIVATE_DECLARE_MEMBER(Widget, privateName);
 
 **Passo 2: Accedere ai membri nei tuoi test:**
 ```cpp
-TEST_FRIEND(WidgetTest, AccessPrivate) {
+TEST_F_FRIEND(WidgetTest, AccessPrivate) {
     // Access using the macro
     int& secret = GTESTG_PRIVATE_MEMBER(Widget, secret_, &w);
     EXPECT_EQ(secret, 42);

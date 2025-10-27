@@ -560,13 +560,13 @@ struct MyClassTest : ::testing::Test {
     MyClass obj{42, "secret"};
 };
 
-TEST_FRIEND(MyClassTest, AccessPrivateMembers) {
+TEST_F_FRIEND(MyClassTest, AccessPrivateMembers) {
     // private 멤버에 직접 접근!
     EXPECT_EQ(obj.privateValue, 42);
     EXPECT_EQ(obj.privateName, "secret");
 }
 
-TEST_FRIEND(MyClassTest, ModifyPrivateMembers) {
+TEST_F_FRIEND(MyClassTest, ModifyPrivateMembers) {
     // private 멤버 수정 가능
     obj.privateValue = 100;
     EXPECT_EQ(obj.privateValue, 100);
@@ -599,7 +599,7 @@ TEST_FRIEND(MyClassTest, ModifyPrivateMembers) {
 
 | 매크로 | 목적 | 사용법 |
 |-------|---------|-------|
-| `TEST_FRIEND(Suite, TestName)` | friend 접근 권한이 있는 테스트 정의 | TEST_F와 동일 |
+| `TEST_F_FRIEND(Suite, TestName)` | friend 접근 권한이 있는 테스트 정의 | TEST_F와 동일 |
 | `TEST_G_FRIEND(TestClassName, TestName)` | friend 접근 권한이 있는 생성기 테스트 정의 | TEST_G와 동일 |
 
 ### 사용 예제
@@ -620,7 +620,7 @@ struct WidgetTest : ::testing::Test {
     Widget w;
 };
 
-TEST_FRIEND(WidgetTest, CheckSecret) {
+TEST_F_FRIEND(WidgetTest, CheckSecret) {
     EXPECT_EQ(w.secret_, 42);  // private 멤버에 직접 접근
 }
 ```
@@ -701,7 +701,7 @@ struct DerivedTest : ::testing::Test {
     Derived d;
 };
 
-TEST_FRIEND(DerivedTest, AccessBoth) {
+TEST_F_FRIEND(DerivedTest, AccessBoth) {
     EXPECT_EQ(d.base_secret_, 10);     // 기본 private에 접근
     EXPECT_EQ(d.derived_secret_, 20);  // 파생 private에 접근
 }
@@ -711,7 +711,7 @@ TEST_FRIEND(DerivedTest, AccessBoth) {
 
 1. **명시적 권한 부여 필요**: private 접근이 필요한 각 테스트는 대상 클래스에 명시적으로 나열되어야 합니다
 2. **마법 없음**: 표준 C++ friend 선언 사용 - 간단하고 예측 가능
-3. **TEST_FRIEND는 선택사항**: `TEST_FRIEND`는 `TEST_F`로 매핑되는 편의 매크로입니다. 클래스에 적절한 `GTESTG_FRIEND_TEST` 선언이 있는 경우 일반 `TEST_F`를 사용할 수 있습니다
+3. **TEST_F_FRIEND는 선택사항**: `TEST_F_FRIEND`는 `TEST_F`로 매핑되는 편의 매크로입니다. 클래스에 적절한 `GTESTG_FRIEND_TEST` 선언이 있는 경우 일반 `TEST_F`를 사용할 수 있습니다
 4. **컴파일 타임 안전성**: friend 접근 권한이 부여되지 않은 상태에서 테스트가 private 멤버에 접근하려고 하면 컴파일 오류가 발생합니다
 5. **유지보수**: private 접근이 필요한 새 테스트를 추가할 때 대상 클래스에 해당 `GTESTG_FRIEND_TEST` 선언을 추가하는 것을 잊지 마세요
 
@@ -734,7 +734,7 @@ TEST_FRIEND(DerivedTest, AccessBoth) {
 
 라이브러리는 테스트에서 private 및 protected 멤버에 액세스하기 위한 통합 시스템을 제공합니다. 클래스에 단일 매크로 `GTESTG_FRIEND_ACCESS_PRIVATE()`를 추가하면 private 멤버 액세스를 위한 **두 가지 상호 보완적인 접근 방식**이 활성화됩니다:
 
-1. **TEST_FRIEND/TEST_G_FRIEND를 통한 직접 액세스** - 대부분의 경우 권장
+1. **TEST_F_FRIEND/TEST_G_FRIEND를 통한 직접 액세스** - 대부분의 경우 권장
 2. **GTESTG_PRIVATE_MEMBER 매크로를 통한 함수 기반 액세스** - 더 명시적인 제어를 위해
 
 두 접근 방식은 원활하게 함께 작동하며 동일한 테스트에서 사용할 수 있습니다.
@@ -755,20 +755,20 @@ public:
 ```
 
 이 매크로는 다음에 대한 friend 액세스를 부여합니다:
-- **VirtualAccessor 템플릿** - TEST_FRIEND 및 TEST_G_FRIEND에서 사용
+- **VirtualAccessor 템플릿** - TEST_F_FRIEND 및 TEST_G_FRIEND에서 사용
 - **gtestg_private_accessMember 함수** - GTESTG_PRIVATE_MEMBER 매크로에서 사용
 
-#### 접근 방식 1: TEST_FRIEND 및 TEST_G_FRIEND 사용 (권장)
+#### 접근 방식 1: TEST_F_FRIEND 및 TEST_G_FRIEND 사용 (권장)
 
-간단한 경우 `TEST_FRIEND` 또는 `TEST_G_FRIEND`를 사용하여 private 멤버에 직접 액세스할 수 있는 테스트를 생성합니다:
+간단한 경우 `TEST_F_FRIEND` 또는 `TEST_G_FRIEND`를 사용하여 private 멤버에 직접 액세스할 수 있는 테스트를 생성합니다:
 
-**TEST_FRIEND 예제:**
+**TEST_F_FRIEND 예제:**
 ```cpp
 struct WidgetTest : ::testing::Test {
     Widget w;
 };
 
-TEST_FRIEND(WidgetTest, AccessPrivate) {
+TEST_F_FRIEND(WidgetTest, AccessPrivate) {
     // private 멤버에 직접 액세스 (VirtualAccessor 상속을 통해)
     EXPECT_EQ(w.secret_, 42);
     w.secret_ = 100;
@@ -793,7 +793,7 @@ TEST_G_FRIEND(WidgetGenTest, GeneratorTest) {
 ```
 
 **다중 파일 지원:**
-`TEST_FRIEND` 및 `TEST_G_FRIEND`는 동일한 실행 파일에 링크된 여러 .cpp 파일에서 테스트가 정의된 경우에도 올바르게 작동합니다. 예제는 `test_friend_multi_file1.cpp` 및 `test_friend_multi_file2.cpp`를 참조하세요.
+`TEST_F_FRIEND` 및 `TEST_G_FRIEND`는 동일한 실행 파일에 링크된 여러 .cpp 파일에서 테스트가 정의된 경우에도 올바르게 작동합니다. 예제는 `test_friend_multi_file1.cpp` 및 `test_friend_multi_file2.cpp`를 참조하세요.
 
 #### 접근 방식 2: GTESTG_PRIVATE_MEMBER 매크로 사용 (명시적 제어)
 
@@ -808,7 +808,7 @@ GTESTG_PRIVATE_DECLARE_MEMBER(Widget, privateName);
 
 **2단계: 테스트에서 멤버에 액세스:**
 ```cpp
-TEST_FRIEND(WidgetTest, AccessPrivate) {
+TEST_F_FRIEND(WidgetTest, AccessPrivate) {
     // 매크로를 사용하여 액세스
     int& secret = GTESTG_PRIVATE_MEMBER(Widget, secret_, &w);
     EXPECT_EQ(secret, 42);

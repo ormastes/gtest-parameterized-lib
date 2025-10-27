@@ -269,7 +269,12 @@ TEST_G(AlignedModeTest, EmptyGenerator) {
 
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
+    const bool listing_only = ::testing::GTEST_FLAG(list_tests);
     int result = RUN_ALL_TESTS();
+    
+    if (listing_only) {
+        return result;
+    }
     
     // Verify all test execution counts
     printf("\n=== Test Execution Count Summary ===\n");

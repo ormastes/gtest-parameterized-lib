@@ -24,23 +24,23 @@
 // TEST_F style: friend-aware test that derives from a VirtualAccessor.
 // IMPORTANT: Must be used at root namespace (not inside any namespace).
 // If you need tests in a namespace, use TEST_F with GTESTG_PRIVATE_MEMBER macros instead.
-#define TEST_FRIEND(Suite, TestName)                                                      \
+#define TEST_F_FRIEND(Suite, TestName)                                                      \
     namespace gtestg_detail { \
-    struct Suite##TestName{};                                                                \
-    template<> struct VirtualAccessor<Suite, Suite##TestName>                               \
+    struct TestName{};                                                                \
+    template<> struct VirtualAccessor<Suite, TestName>                               \
         : public Suite {                \
      public:                                                                              \
-      VirtualAccessor<Suite, Suite##TestName>  () {}                                \
+      VirtualAccessor<Suite, TestName>  () {}                                \
       void TestBody() override;                                                           \
                                                                                           \
      private:                                                                             \
       static ::testing::TestInfo* const test_info_ GTEST_ATTRIBUTE_UNUSED_;               \
-      VirtualAccessor<Suite, Suite##TestName>  (                                    \
-          VirtualAccessor<Suite, Suite##TestName>   const &) = delete;              \
-      VirtualAccessor<Suite, Suite##TestName>   &operator=(                         \
-          VirtualAccessor<Suite, Suite##TestName>   const &) = delete;              \
+      VirtualAccessor<Suite, TestName>  (                                    \
+          VirtualAccessor<Suite, TestName>   const &) = delete;              \
+      VirtualAccessor<Suite, TestName>   &operator=(                         \
+          VirtualAccessor<Suite, TestName>   const &) = delete;              \
     };                                                                                    \
-    ::testing::TestInfo* const VirtualAccessor<Suite, Suite##TestName> ::          \
+    ::testing::TestInfo* const VirtualAccessor<Suite, TestName> ::          \
         test_info_ =                                                                      \
         ::testing::internal::MakeAndRegisterTestInfo(                                     \
             #Suite,                                                                       \
@@ -48,56 +48,47 @@
             nullptr, nullptr,                                                             \
             ::testing::internal::CodeLocation(__FILE__, __LINE__),                        \
             (::testing::internal::GetTypeId<                                              \
-                ::gtestg_detail::VirtualAccessor<Suite, Suite##TestName>>()),              \
+                ::gtestg_detail::VirtualAccessor<Suite, TestName>>()),              \
             ::testing::internal::SuiteApiResolver<                                        \
-                ::gtestg_detail::VirtualAccessor<Suite, Suite##TestName>>::                \
+                ::gtestg_detail::VirtualAccessor<Suite, TestName>>::                \
                 GetSetUpCaseOrSuite(__FILE__, __LINE__),                                  \
             ::testing::internal::SuiteApiResolver<                                        \
-                ::gtestg_detail::VirtualAccessor<Suite, Suite##TestName>>::                \
+                ::gtestg_detail::VirtualAccessor<Suite, TestName>>::                \
                 GetTearDownCaseOrSuite(__FILE__, __LINE__),                               \
             new ::testing::internal::TestFactoryImpl<                                     \
-                ::gtestg_detail::VirtualAccessor<Suite, Suite##TestName>>);                        \
+                ::gtestg_detail::VirtualAccessor<Suite, TestName>>);                        \
             } \
-    void gtestg_detail::VirtualAccessor<Suite, ::gtestg_detail::Suite##TestName>::TestBody()
+    void gtestg_detail::VirtualAccessor<Suite, ::gtestg_detail::TestName>::TestBody()
 
 // TEST_G_FRIEND(Suite, TestName) for generator/parameterized tests.
 // IMPORTANT: Must be used at root namespace (not inside any namespace).
 // If you need tests in a namespace, use TEST_G with GTESTG_PRIVATE_MEMBER macros instead.
 #define TEST_G_FRIEND(Suite, TestName)                                                    \
-    namespace gtestg_detail { \
-    struct Suite##TestName{};                                                                \
-    template<> struct VirtualAccessor<Suite, Suite##TestName>                               \
-        : public Suite {                \
+    namespace gtestg_detail {                                                             \
+    struct TestName##Tag{};                                                               \
+    template<> struct VirtualAccessor<Suite, TestName##Tag>                              \
+        : public Suite {                                                                  \
      public:                                                                              \
-      VirtualAccessor<Suite, Suite##TestName>() {}                                \
+      VirtualAccessor() {}                                                                \
       void TestBody() override;                                                           \
-                                                                                          \
-     private:                                                                             \
-      static int AddToRegistry() {                                                        \
-        ::testing::UnitTest::GetInstance()                                                \
-            ->parameterized_test_registry()                                               \
-            .GetTestSuitePatternHolder<                                                   \
-                ::gtestg_detail::VirtualAccessor<Suite, Suite##TestName>>(                 \
-                #Suite,                                                                   \
-                ::testing::internal::CodeLocation(__FILE__, __LINE__))                    \
-            ->AddTestPattern(                                                             \
-                #Suite,                                                                   \
-                #TestName,                                                                \
-                new ::testing::internal::TestMetaFactory<                                 \
-                    ::gtestg_detail::VirtualAccessor<Suite, Suite##TestName>>(),                   \
-                ::testing::internal::CodeLocation(__FILE__, __LINE__));                   \
-        return 0;                                                                         \
-      }                                                                                   \
-      static int gtest_registering_dummy_ GTEST_ATTRIBUTE_UNUSED_;                        \
-      VirtualAccessor<Suite, Suite##TestName>(                                    \
-          VirtualAccessor<Suite, Suite##TestName> const &) = delete;              \
-      VirtualAccessor<Suite, Suite##TestName> &operator=(                         \
-          VirtualAccessor<Suite, Suite##TestName> const &) = delete;              \
     };                                                                                    \
-    int VirtualAccessor<Suite, Suite##TestName>::gtest_registering_dummy_ =       \
-        VirtualAccessor<Suite, Suite##TestName>::AddToRegistry();                 \
-    } \
-    void gtestg_detail::VirtualAccessor<Suite, ::gtestg_detail::Suite##TestName>::TestBody()
+    }                                                                                     \
+    class Suite##__##TestName##__FriendTest : public ::gtestg_detail::VirtualAccessor<Suite, ::gtestg_detail::TestName##Tag> { \
+     public:                                                                              \
+      void TestBody() override {                                                          \
+        ::gtestg_detail::VirtualAccessor<Suite, ::gtestg_detail::TestName##Tag>::TestBody(); \
+      }                                                                                   \
+    };                                                                                    \
+    inline gtest_generator::DynamicRangeGenerator* __gtest_generator__get_generator_##Suite##TestName() { \
+        return gtest_generator::CreateGenerator<Suite##__##TestName##__FriendTest>(       \
+            #Suite"."#TestName);                                                          \
+    }                                                                                     \
+    INSTANTIATE_TEST_SUITE_P(Generator, Suite##__##TestName##__FriendTest,               \
+        testing::internal::ParamGenerator<int>(__gtest_generator__get_generator_##Suite##TestName())); \
+    TEST_P(Suite##__##TestName##__FriendTest, __) {                                      \
+        ::gtestg_detail::VirtualAccessor<Suite, ::gtestg_detail::TestName##Tag>::TestBody(); \
+    }                                                                                     \
+    void ::gtestg_detail::VirtualAccessor<Suite, ::gtestg_detail::TestName##Tag>::TestBody()
 
 
 // Template function declaration (prevent multiple definition with #ifdef)
@@ -108,14 +99,14 @@
 template <typename ID, typename TestCase, typename Target>
 auto gtestg_private_accessMember(TestCase* test_case, Target* target = nullptr) -> decltype(auto);
 
-// VirtualAccessor template (universal, works with TEST_FRIEND/TEST_G_FRIEND)
+// VirtualAccessor template (universal, works with TEST_F_FRIEND/TEST_G_FRIEND)
 namespace gtestg_detail {
 template <typename Suite, typename Tag>
 struct VirtualAccessor : public Suite {};
 }
 
 // Unified macro that grants friend access for ALL approaches:
-// - VirtualAccessor template (for TEST_FRIEND, TEST_G_FRIEND)
+// - VirtualAccessor template (for TEST_F_FRIEND, TEST_G_FRIEND)
 // - Function-based (gtestg_private_accessMember for GTESTG_PRIVATE_MEMBER macros)
 #define GTESTG_FRIEND_ACCESS_PRIVATE() \
   template <typename, typename> friend struct ::gtestg_detail::VirtualAccessor; \
@@ -640,4 +631,3 @@ inline DynamicRangeGenerator* CreateGenerator(const std::string& name) {
       SUCCEED() << "Float arrays are equal (size: " << (size) << ")"; \
     } \
   } while(0)
-

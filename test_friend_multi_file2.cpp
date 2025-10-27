@@ -21,10 +21,10 @@ struct BoxBTest : ::testing::Test {
     BoxB box{2.5};
 };
 
-// TEST_FRIEND in file 2
-TEST_FRIEND(BoxBTest, AccessFromFile2) {
+// TEST_F_FRIEND in file 2
+TEST_F_FRIEND(BoxBTest, AccessFromFile2) {
     EXPECT_DOUBLE_EQ(box.data_, 2.5);
-    printf("File2 TEST_FRIEND: data=%.2f\n", box.data_);
+    printf("File2 TEST_F_FRIEND: data=%.2f\n", box.data_);
 }
 
 // TEST_G_FRIEND in file 2

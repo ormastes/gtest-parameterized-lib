@@ -23,10 +23,10 @@ struct BoxATest : ::testing::Test {
     BoxA box{42};
 };
 
-// TEST_FRIEND in file 1
-TEST_FRIEND(BoxATest, AccessFromFile1) {
+// TEST_F_FRIEND in file 1
+TEST_F_FRIEND(BoxATest, AccessFromFile1) {
     EXPECT_EQ(box.value_, 42);
-    printf("File1 TEST_FRIEND: value=%d\n", box.value_);
+    printf("File1 TEST_F_FRIEND: value=%d\n", box.value_);
 }
 
 // TEST_G_FRIEND in file 1

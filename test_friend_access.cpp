@@ -1,5 +1,5 @@
 // test_friend_access.cpp
-// Test file to verify the new TEST_FRIEND and TEST_G_FRIEND macros work correctly
+// Test file to verify the new TEST_F_FRIEND and TEST_G_FRIEND macros work correctly
 // with private member access
 
 #include "gtest_generator.h"
@@ -25,7 +25,7 @@ public:
     SecretKeeper() = default;
     SecretKeeper(int val) : secret_value_(val) {}
 
-    // Grant friend access - enables both TEST_FRIEND and GTESTG_PRIVATE_MEMBER approaches
+    // Grant friend access - enables both TEST_F_FRIEND and GTESTG_PRIVATE_MEMBER approaches
     GTESTG_FRIEND_ACCESS_PRIVATE();
 
     // Public interface
@@ -46,14 +46,14 @@ private:
 public:
     ComplexPrivate() = default;
 
-    // Grant friend access - enables both TEST_FRIEND and GTESTG_PRIVATE_MEMBER approaches
+    // Grant friend access - enables both TEST_F_FRIEND and GTESTG_PRIVATE_MEMBER approaches
     GTESTG_FRIEND_ACCESS_PRIVATE();
 
     size_t getSize() const { return private_data_.size(); }
 };
 
 // ============================================================================
-// TEST_FRIEND tests - Standard fixture with private access
+// TEST_F_FRIEND tests - Standard fixture with private access
 // ============================================================================
 
 // Test fixture
@@ -62,8 +62,8 @@ struct SecretKeeperTest : ::testing::Test {
     SecretKeeper keeper_custom{77};
 };
 
-// Test accessing private members using TEST_FRIEND
-TEST_FRIEND(SecretKeeperTest, AccessPrivateMembers) {
+// Test accessing private members using TEST_F_FRIEND
+TEST_F_FRIEND(SecretKeeperTest, AccessPrivateMembers) {
     // Access private member variables
     EXPECT_EQ(keeper.secret_value_, 42);
     EXPECT_EQ(keeper.secret_message_, "Top Secret");
@@ -78,7 +78,7 @@ TEST_FRIEND(SecretKeeperTest, AccessPrivateMembers) {
     EXPECT_EQ(keeper_custom.secret_value_, 77);
 }
 
-TEST_FRIEND(SecretKeeperTest, ModifyPrivateMembers) {
+TEST_F_FRIEND(SecretKeeperTest, ModifyPrivateMembers) {
     // We can also modify private members
     keeper.secret_value_ = 123;
     EXPECT_EQ(keeper.secret_value_, 123);
@@ -90,7 +90,7 @@ TEST_FRIEND(SecretKeeperTest, ModifyPrivateMembers) {
     EXPECT_DOUBLE_EQ(keeper.protected_value_, 2.71);
 }
 
-TEST_FRIEND(SecretKeeperTest, CallPrivateMethods) {
+TEST_F_FRIEND(SecretKeeperTest, CallPrivateMethods) {
     // Access and call private methods
     int result = keeper.computeSecret(10);
     EXPECT_EQ(result, 420);  // 42 * 10
@@ -100,7 +100,7 @@ TEST_FRIEND(SecretKeeperTest, CallPrivateMethods) {
     EXPECT_EQ(result, 35);  // 5 * 7
 }
 
-TEST_FRIEND(SecretKeeperTest, AccessStaticPrivateMembers) {
+TEST_F_FRIEND(SecretKeeperTest, AccessStaticPrivateMembers) {
     // Access static private members
     EXPECT_EQ(SecretKeeper::static_secret_, 999);
 
@@ -117,7 +117,7 @@ struct ComplexPrivateTest : ::testing::Test {
     ComplexPrivate complex;
 };
 
-TEST_FRIEND(ComplexPrivateTest, AccessComplexPrivateData) {
+TEST_F_FRIEND(ComplexPrivateTest, AccessComplexPrivateData) {
     // Access private vector
     ASSERT_EQ(complex.private_data_.size(), 5);
     EXPECT_EQ(complex.private_data_[0], 1);
@@ -262,7 +262,7 @@ class DerivedSecret : public SecretKeeper {
 public:
     DerivedSecret() : SecretKeeper(55) {}
 
-    // Grant friend access - enables both TEST_FRIEND and GTESTG_PRIVATE_MEMBER approaches
+    // Grant friend access - enables both TEST_F_FRIEND and GTESTG_PRIVATE_MEMBER approaches
     GTESTG_FRIEND_ACCESS_PRIVATE();
 
 private:
@@ -273,7 +273,7 @@ struct DerivedTest : ::testing::Test {
     DerivedSecret derived;
 };
 
-TEST_FRIEND(DerivedTest, AccessDerivedAndBasePrivates) {
+TEST_F_FRIEND(DerivedTest, AccessDerivedAndBasePrivates) {
     // Access base class privates
     EXPECT_EQ(derived.secret_value_, 55);
     EXPECT_EQ(derived.secret_message_, "Top Secret");
@@ -290,7 +290,7 @@ TEST_FRIEND(DerivedTest, AccessDerivedAndBasePrivates) {
 }
 
 // Test multiple objects in same test
-TEST_FRIEND(SecretKeeperTest, MultipleObjects) {
+TEST_F_FRIEND(SecretKeeperTest, MultipleObjects) {
     SecretKeeper k1(10);
     SecretKeeper k2(20);
     SecretKeeper k3(30);
@@ -314,7 +314,7 @@ int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
 
     std::cout << "\n========================================\n";
-    std::cout << "Testing TEST_FRIEND and TEST_G_FRIEND\n";
+    std::cout << "Testing TEST_F_FRIEND and TEST_G_FRIEND\n";
     std::cout << "Private Member Access Feature\n";
     std::cout << "========================================\n\n";
 

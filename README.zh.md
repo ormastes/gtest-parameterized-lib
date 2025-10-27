@@ -560,13 +560,13 @@ struct MyClassTest : ::testing::Test {
     MyClass obj{42, "secret"};
 };
 
-TEST_FRIEND(MyClassTest, AccessPrivateMembers) {
+TEST_F_FRIEND(MyClassTest, AccessPrivateMembers) {
     // 直接访问私有成员!
     EXPECT_EQ(obj.privateValue, 42);
     EXPECT_EQ(obj.privateName, "secret");
 }
 
-TEST_FRIEND(MyClassTest, ModifyPrivateMembers) {
+TEST_F_FRIEND(MyClassTest, ModifyPrivateMembers) {
     // 可以修改私有成员
     obj.privateValue = 100;
     EXPECT_EQ(obj.privateValue, 100);
@@ -599,7 +599,7 @@ TEST_FRIEND(MyClassTest, ModifyPrivateMembers) {
 
 | 宏 | 目的 | 用法 |
 |-------|---------|-------|
-| `TEST_FRIEND(Suite, TestName)` | 定义具有friend访问权限的测试 | 与TEST_F相同 |
+| `TEST_F_FRIEND(Suite, TestName)` | 定义具有friend访问权限的测试 | 与TEST_F相同 |
 | `TEST_G_FRIEND(TestClassName, TestName)` | 定义具有friend访问权限的生成器测试 | 与TEST_G相同 |
 
 ### 使用示例
@@ -620,7 +620,7 @@ struct WidgetTest : ::testing::Test {
     Widget w;
 };
 
-TEST_FRIEND(WidgetTest, CheckSecret) {
+TEST_F_FRIEND(WidgetTest, CheckSecret) {
     EXPECT_EQ(w.secret_, 42);  // 直接访问私有成员
 }
 ```
@@ -701,7 +701,7 @@ struct DerivedTest : ::testing::Test {
     Derived d;
 };
 
-TEST_FRIEND(DerivedTest, AccessBoth) {
+TEST_F_FRIEND(DerivedTest, AccessBoth) {
     EXPECT_EQ(d.base_secret_, 10);     // 访问基类私有成员
     EXPECT_EQ(d.derived_secret_, 20);  // 访问派生类私有成员
 }
@@ -711,7 +711,7 @@ TEST_FRIEND(DerivedTest, AccessBoth) {
 
 1. **需要显式授权**: 每个需要私有访问的测试必须在目标类中显式列出
 2. **没有魔法**: 使用标准C++ friend声明 - 简单且可预测
-3. **TEST_FRIEND是可选的**: `TEST_FRIEND`只是一个映射到`TEST_F`的便利宏。如果类有适当的`GTESTG_FRIEND_TEST`声明,您可以使用常规`TEST_F`
+3. **TEST_F_FRIEND是可选的**: `TEST_F_FRIEND`只是一个映射到`TEST_F`的便利宏。如果类有适当的`GTESTG_FRIEND_TEST`声明,您可以使用常规`TEST_F`
 4. **编译时安全**: 如果测试尝试在未授予friend访问权限的情况下访问私有成员,您将收到编译错误
 5. **维护**: 添加需要私有访问的新测试时,记得向目标类添加相应的`GTESTG_FRIEND_TEST`声明
 
@@ -730,17 +730,17 @@ TEST_FRIEND(DerivedTest, AccessBoth) {
 
 有关完整示例,请参见`test_friend_access.cpp`。
 
-### TEST_FRIEND和TEST_G_FRIEND宏
+### TEST_F_FRIEND和TEST_G_FRIEND宏
 
-库提供了`TEST_FRIEND`和`TEST_G_FRIEND`宏，它们创建具有VirtualAccessor模式内置支持的测试基础设施。这些宏与`GTESTG_FRIEND_ACCESS_PRIVATE()`声明无缝协作。
+库提供了`TEST_F_FRIEND`和`TEST_G_FRIEND`宏，它们创建具有VirtualAccessor模式内置支持的测试基础设施。这些宏与`GTESTG_FRIEND_ACCESS_PRIVATE()`声明无缝协作。
 
 **关键点:**
 - `GTESTG_FRIEND_ACCESS_PRIVATE()`为基于类的(VirtualAccessor)和基于函数的(gtestg_private_accessMember)方法**都**授予friend访问权限
-- 对于常规TEST_F风格的测试使用`TEST_FRIEND`
+- 对于常规TEST_F风格的测试使用`TEST_F_FRIEND`
 - 对于基于生成器的参数化测试使用`TEST_G_FRIEND`
 - 继续使用`GTESTG_PRIVATE_MEMBER`宏访问私有成员
 
-**TEST_FRIEND示例:**
+**TEST_F_FRIEND示例:**
 ```cpp
 class Widget {
 private:
@@ -759,7 +759,7 @@ struct WidgetTest : ::testing::Test {
     Widget w;
 };
 
-TEST_FRIEND(WidgetTest, AccessPrivate) {
+TEST_F_FRIEND(WidgetTest, AccessPrivate) {
     // 使用基于函数的访问器访问私有成员
     int& secret = GTESTG_PRIVATE_MEMBER(Widget, secret_, &w);
     EXPECT_EQ(secret, 42);
@@ -786,13 +786,13 @@ TEST_G_FRIEND(WidgetGenTest, GeneratorTest) {
 ```
 
 **多文件支持:**
-`TEST_FRIEND`和`TEST_G_FRIEND`在多个.cpp文件中定义测试并链接到同一可执行文件时正确工作，就像常规`TEST_G`一样。有关示例，请参见`test_friend_multi_file1.cpp`和`test_friend_multi_file2.cpp`。
+`TEST_F_FRIEND`和`TEST_G_FRIEND`在多个.cpp文件中定义测试并链接到同一可执行文件时正确工作，就像常规`TEST_G`一样。有关示例，请参见`test_friend_multi_file1.cpp`和`test_friend_multi_file2.cpp`。
 
 ### 统一私有成员访问系统
 
 该库提供了一个统一系统，用于访问测试中的私有和保护成员。通过向类中添加单个宏`GTESTG_FRIEND_ACCESS_PRIVATE()`，您可以启用私有成员访问的**两种互补方法**:
 
-1. **通过TEST_FRIEND/TEST_G_FRIEND直接访问** - 推荐用于大多数情况
+1. **通过TEST_F_FRIEND/TEST_G_FRIEND直接访问** - 推荐用于大多数情况
 2. **通过GTESTG_PRIVATE_MEMBER宏的基于函数的访问** - 用于更明确的控制
 
 这两种方法可以无缝协作并在同一测试中使用。
@@ -813,20 +813,20 @@ public:
 ```
 
 此宏授予以下friend访问权限:
-- **VirtualAccessor模板** - 由TEST_FRIEND和TEST_G_FRIEND使用
+- **VirtualAccessor模板** - 由TEST_F_FRIEND和TEST_G_FRIEND使用
 - **gtestg_private_accessMember函数** - 由GTESTG_PRIVATE_MEMBER宏使用
 
-#### 方法1: 使用TEST_FRIEND和TEST_G_FRIEND (推荐)
+#### 方法1: 使用TEST_F_FRIEND和TEST_G_FRIEND (推荐)
 
-对于简单情况，使用`TEST_FRIEND`或`TEST_G_FRIEND`创建可以直接访问私有成员的测试:
+对于简单情况，使用`TEST_F_FRIEND`或`TEST_G_FRIEND`创建可以直接访问私有成员的测试:
 
-**TEST_FRIEND示例:**
+**TEST_F_FRIEND示例:**
 ```cpp
 struct WidgetTest : ::testing::Test {
     Widget w;
 };
 
-TEST_FRIEND(WidgetTest, AccessPrivate) {
+TEST_F_FRIEND(WidgetTest, AccessPrivate) {
     // 直接访问私有成员(通过VirtualAccessor特化)
     EXPECT_EQ(w.secret_, 42);
     w.secret_ = 100;
@@ -851,10 +851,10 @@ TEST_G_FRIEND(WidgetGenTest, GeneratorTest) {
 ```
 
 **多文件支持:**
-`TEST_FRIEND`和`TEST_G_FRIEND`在测试跨多个.cpp文件定义并链接到同一可执行文件时正确工作。有关示例，请参见`test_friend_multi_file1.cpp`和`test_friend_multi_file2.cpp`。
+`TEST_F_FRIEND`和`TEST_G_FRIEND`在测试跨多个.cpp文件定义并链接到同一可执行文件时正确工作。有关示例，请参见`test_friend_multi_file1.cpp`和`test_friend_multi_file2.cpp`。
 
 **工作原理:**
-- `TEST_FRIEND`和`TEST_G_FRIEND`在`gtestg_detail`命名空间内创建`VirtualAccessor<Suite, TestName>`的显式模板特化
+- `TEST_F_FRIEND`和`TEST_G_FRIEND`在`gtestg_detail`命名空间内创建`VirtualAccessor<Suite, TestName>`的显式模板特化
 - 此特化通过`GTESTG_FRIEND_ACCESS_PRIVATE()`授予friend访问权限
 - 因为`VirtualAccessor`是friend并继承自您的测试fixture，它可以访问目标类的私有成员
 - 测试体在此friend类的上下文中执行，从而启用直接私有成员访问
@@ -873,7 +873,7 @@ GTESTG_PRIVATE_DECLARE_MEMBER(Widget, privateName);
 
 **步骤2: 在测试中访问成员:**
 ```cpp
-TEST_FRIEND(WidgetTest, AccessPrivate) {
+TEST_F_FRIEND(WidgetTest, AccessPrivate) {
     // 使用宏访问
     int& secret = GTESTG_PRIVATE_MEMBER(Widget, secret_, &w);
     EXPECT_EQ(secret, 42);

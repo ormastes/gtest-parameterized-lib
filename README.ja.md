@@ -560,13 +560,13 @@ struct MyClassTest : ::testing::Test {
     MyClass obj{42, "secret"};
 };
 
-TEST_FRIEND(MyClassTest, AccessPrivateMembers) {
+TEST_F_FRIEND(MyClassTest, AccessPrivateMembers) {
     // プライベートメンバーへの直接アクセス！
     EXPECT_EQ(obj.privateValue, 42);
     EXPECT_EQ(obj.privateName, "secret");
 }
 
-TEST_FRIEND(MyClassTest, ModifyPrivateMembers) {
+TEST_F_FRIEND(MyClassTest, ModifyPrivateMembers) {
     // プライベートメンバーを変更可能
     obj.privateValue = 100;
     EXPECT_EQ(obj.privateValue, 100);
@@ -599,7 +599,7 @@ TEST_FRIEND(MyClassTest, ModifyPrivateMembers) {
 
 | マクロ | 目的 | 使用方法 |
 |-------|---------|-------|
-| `TEST_FRIEND(Suite, TestName)` | friendアクセス付きのテストを定義 | TEST_Fと同じ |
+| `TEST_F_FRIEND(Suite, TestName)` | friendアクセス付きのテストを定義 | TEST_Fと同じ |
 | `TEST_G_FRIEND(TestClassName, TestName)` | friendアクセス付きのジェネレーターテストを定義 | TEST_Gと同じ |
 
 ### 使用例
@@ -620,7 +620,7 @@ struct WidgetTest : ::testing::Test {
     Widget w;
 };
 
-TEST_FRIEND(WidgetTest, CheckSecret) {
+TEST_F_FRIEND(WidgetTest, CheckSecret) {
     EXPECT_EQ(w.secret_, 42);  // プライベートメンバーへの直接アクセス
 }
 ```
@@ -701,7 +701,7 @@ struct DerivedTest : ::testing::Test {
     Derived d;
 };
 
-TEST_FRIEND(DerivedTest, AccessBoth) {
+TEST_F_FRIEND(DerivedTest, AccessBoth) {
     EXPECT_EQ(d.base_secret_, 10);     // 基底クラスのプライベートにアクセス
     EXPECT_EQ(d.derived_secret_, 20);  // 派生クラスのプライベートにアクセス
 }
@@ -711,7 +711,7 @@ TEST_FRIEND(DerivedTest, AccessBoth) {
 
 1. **明示的な許可が必要**: プライベートアクセスが必要な各テストは、対象クラスで明示的にリストする必要があります
 2. **マジックなし**: 標準C++のfriend宣言を使用 - シンプルで予測可能
-3. **TEST_FRIENDはオプション**: `TEST_FRIEND`は`TEST_F`にマッピングされる便利なマクロです。クラスに適切な`GTESTG_FRIEND_TEST`宣言がある場合は、通常の`TEST_F`を使用できます
+3. **TEST_F_FRIENDはオプション**: `TEST_F_FRIEND`は`TEST_F`にマッピングされる便利なマクロです。クラスに適切な`GTESTG_FRIEND_TEST`宣言がある場合は、通常の`TEST_F`を使用できます
 4. **コンパイル時の安全性**: friendアクセスが許可されていない状態でテストがプライベートメンバーにアクセスしようとすると、コンパイルエラーが発生します
 5. **メンテナンス**: プライベートアクセスが必要な新しいテストを追加する場合は、対象クラスに対応する`GTESTG_FRIEND_TEST`宣言を追加することを忘れないでください
 
@@ -734,7 +734,7 @@ TEST_FRIEND(DerivedTest, AccessBoth) {
 
 ライブラリは、テストでprivateおよびprotectedメンバーにアクセスするための統合システムを提供します。クラスに単一のマクロ`GTESTG_FRIEND_ACCESS_PRIVATE()`を追加することで、プライベートメンバーアクセスのための**2つの相補的なアプローチ**が有効になります:
 
-1. **TEST_FRIEND/TEST_G_FRIENDによる直接アクセス** - ほとんどの場合に推奨
+1. **TEST_F_FRIEND/TEST_G_FRIENDによる直接アクセス** - ほとんどの場合に推奨
 2. **GTESTG_PRIVATE_MEMBERマクロによる関数ベースアクセス** - より明示的な制御のため
 
 両方のアプローチはシームレスに連携し、同じテストで使用できます。
@@ -755,20 +755,20 @@ public:
 ```
 
 このマクロは以下へのfriendアクセスを許可します:
-- **VirtualAccessorテンプレート** - TEST_FRIENDおよびTEST_G_FRIENDで使用
+- **VirtualAccessorテンプレート** - TEST_F_FRIENDおよびTEST_G_FRIENDで使用
 - **gtestg_private_accessMember関数** - GTESTG_PRIVATE_MEMBERマクロで使用
 
-#### アプローチ1: TEST_FRIENDとTEST_G_FRIENDの使用（推奨）
+#### アプローチ1: TEST_F_FRIENDとTEST_G_FRIENDの使用（推奨）
 
-シンプルな場合は、`TEST_FRIEND`または`TEST_G_FRIEND`を使用してプライベートメンバーに直接アクセスできるテストを作成します:
+シンプルな場合は、`TEST_F_FRIEND`または`TEST_G_FRIEND`を使用してプライベートメンバーに直接アクセスできるテストを作成します:
 
-**TEST_FRIENDの例:**
+**TEST_F_FRIENDの例:**
 ```cpp
 struct WidgetTest : ::testing::Test {
     Widget w;
 };
 
-TEST_FRIEND(WidgetTest, AccessPrivate) {
+TEST_F_FRIEND(WidgetTest, AccessPrivate) {
     // プライベートメンバーへの直接アクセス（VirtualAccessor継承を介して）
     EXPECT_EQ(w.secret_, 42);
     w.secret_ = 100;
@@ -793,7 +793,7 @@ TEST_G_FRIEND(WidgetGenTest, GeneratorTest) {
 ```
 
 **マルチファイルサポート:**
-`TEST_FRIEND`および`TEST_G_FRIEND`は、同じ実行可能ファイルにリンクされた複数の.cppファイルでテストが定義されている場合に正しく動作します。例については`test_friend_multi_file1.cpp`および`test_friend_multi_file2.cpp`を参照してください。
+`TEST_F_FRIEND`および`TEST_G_FRIEND`は、同じ実行可能ファイルにリンクされた複数の.cppファイルでテストが定義されている場合に正しく動作します。例については`test_friend_multi_file1.cpp`および`test_friend_multi_file2.cpp`を参照してください。
 
 #### アプローチ2: GTESTG_PRIVATE_MEMBERマクロの使用（明示的制御）
 
@@ -808,7 +808,7 @@ GTESTG_PRIVATE_DECLARE_MEMBER(Widget, privateName);
 
 **ステップ2: テストでメンバーにアクセス:**
 ```cpp
-TEST_FRIEND(WidgetTest, AccessPrivate) {
+TEST_F_FRIEND(WidgetTest, AccessPrivate) {
     // マクロを使用してアクセス
     int& secret = GTESTG_PRIVATE_MEMBER(Widget, secret_, &w);
     EXPECT_EQ(secret, 42);

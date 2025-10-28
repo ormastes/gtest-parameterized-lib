@@ -47,13 +47,10 @@
             #TestName,                                                                    \
             nullptr, nullptr,                                                             \
             ::testing::internal::CodeLocation(__FILE__, __LINE__),                        \
-            (::testing::internal::GetTypeId<                                              \
-                ::gtestg_detail::VirtualAccessor<Suite, TestName>>()),              \
-            ::testing::internal::SuiteApiResolver<                                        \
-                ::gtestg_detail::VirtualAccessor<Suite, TestName>>::                \
+            (::testing::internal::GetTypeId<Suite>()),                                  \
+            ::testing::internal::SuiteApiResolver<Suite>::                \
                 GetSetUpCaseOrSuite(__FILE__, __LINE__),                                  \
-            ::testing::internal::SuiteApiResolver<                                        \
-                ::gtestg_detail::VirtualAccessor<Suite, TestName>>::                \
+            ::testing::internal::SuiteApiResolver<Suite>::                \
                 GetTearDownCaseOrSuite(__FILE__, __LINE__),                               \
             new ::testing::internal::TestFactoryImpl<                                     \
                 ::gtestg_detail::VirtualAccessor<Suite, TestName>>);                        \

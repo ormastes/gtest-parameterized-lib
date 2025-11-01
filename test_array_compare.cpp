@@ -22,15 +22,21 @@ TEST_G(ArrayCompareTest, IntArrayEqual) {
     printf("Test passed for array size=%d\n", size);
 }
 
-// Test EXPECT_ARRAY_EQ with failing case
+// Test EXPECT_ARRAY_EQ with failing case - verify it correctly detects mismatch
 TEST_G(ArrayCompareTest, IntArrayNotEqual) {
     USE_GENERATOR();
 
     int expected[] = {1, 2, 3, 4, 5};
     int actual[] = {1, 2, 99, 4, 5};
 
-    // This will show error at index 2
-    EXPECT_ARRAY_EQ(expected, actual, 5);
+    // Verify that EXPECT_ARRAY_EQ correctly detects the mismatch at index 2
+    try {
+        EXPECT_ARRAY_EQ(expected, actual, 5);
+    } catch (...) {
+        printf("Correctly detected arrays not near\n");
+        return;
+    }
+    EXPECT_TRUE(false, "Arrays should not be near at index 2");
 }
 
 // Test ASSERT_ARRAY_EQ (fatal assertion)
@@ -70,7 +76,13 @@ TEST_G(ArrayCompareTest, FloatArrayNotNear) {
     double actual[] = {1.0, 2.0, 3.5};
 
     // This will fail at index 2 (difference 0.5 > tolerance 0.1)
-    EXPECT_ARRAY_NEAR(expected, actual, 3, 0.1);
+    try {
+        EXPECT_ARRAY_NEAR(expected, actual, 3, 0.1);
+    } catch (...) {
+        printf("Correctly detected arrays not near\n");
+        return;
+    }
+    EXPECT_TRUE(false, "Arrays should not be near at index 2");
 }
 
 // Test ASSERT_ARRAY_NEAR (fatal assertion)

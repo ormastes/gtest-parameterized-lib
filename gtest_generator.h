@@ -20,6 +20,39 @@
 #  define GTESTG_CONCAT(a, b) GTESTG_CONCAT_INNER(a, b)
 #endif
 
+// It is FRIEND version of TEST()
+#define TEST_FRIEND(TestName)                                                             \
+    namespace gtestg_detail {                                                             \
+    struct TestName{};                                                                   \
+    template<> struct VirtualAccessor< ::testing::Test, TestName>                        \
+        : public ::testing::Test {                                                       \
+     public:                                                                              \
+      VirtualAccessor< ::testing::Test, TestName>() {}                                  \
+      void TestBody() override;                                                          \
+                                                                                          \
+     private:                                                                             \
+      static ::testing::TestInfo* const test_info_ GTEST_ATTRIBUTE_UNUSED_;              \
+      VirtualAccessor< ::testing::Test, TestName>(                                      \
+          VirtualAccessor< ::testing::Test, TestName> const &) = delete;                \
+      VirtualAccessor< ::testing::Test, TestName>& operator=(                           \
+          VirtualAccessor< ::testing::Test, TestName> const &) = delete;                \
+    };                                                                                    \
+    ::testing::TestInfo* const VirtualAccessor< ::testing::Test, TestName>::            \
+        test_info_ =                                                                      \
+        ::testing::internal::MakeAndRegisterTestInfo(                                     \
+            "FriendTest",                                                                 \
+            #TestName,                                                                    \
+            nullptr, nullptr,                                                             \
+            ::testing::internal::CodeLocation(__FILE__, __LINE__),                        \
+            (::testing::internal::GetTestTypeId()),                                       \
+            ::testing::internal::SuiteApiResolver< ::testing::Test>::                     \
+                GetSetUpCaseOrSuite(__FILE__, __LINE__),                                  \
+            ::testing::internal::SuiteApiResolver< ::testing::Test>::                     \
+                GetTearDownCaseOrSuite(__FILE__, __LINE__),                               \
+            new ::testing::internal::TestFactoryImpl<                                     \
+                ::gtestg_detail::VirtualAccessor< ::testing::Test, TestName>>);          \
+    }                                                                                     \
+    void gtestg_detail::VirtualAccessor< ::testing::Test, ::gtestg_detail::TestName>::TestBody()
 
 // TEST_F style: friend-aware test that derives from a VirtualAccessor.
 // IMPORTANT: Must be used at root namespace (not inside any namespace).
@@ -531,6 +564,7 @@ inline DynamicRangeGenerator* CreateGenerator(const std::string& name) {
   if (gtest_generator::IsCountingMode(*this)) return;
 
 #define GENERATOR(...) gtest_generator::GetGeneratorValue<gtest_generator::make_unique_id(__FILE__, __LINE__)>({__VA_ARGS__}, this)
+#define GENERATOR_TYPED(T,...) gtest_generator::GetGeneratorValue<gtest_generator::make_unique_id(__FILE__, __LINE__), T>({__VA_ARGS__}, this)
 
 #define TEST_G(TestClassName, TestName) \
     class TestClassName##__##TestName : public TestClassName {};\
